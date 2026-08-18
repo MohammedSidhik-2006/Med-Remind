@@ -190,7 +190,7 @@ exports.markTaken = async (req, res) => {
           refillNotified: shouldNotifyRefill ? true : (newStock > medicine.refillAt ? false : medicine.refillNotified)
         } 
       },
-      { new: true }
+      { returnDocument: "after" }
     );
 
     // Notify caregivers
@@ -247,7 +247,7 @@ exports.snoozeMedicine = async (req, res) => {
           snoozeCount: newSnoozeCount
         } 
       },
-      { new: true }
+      { returnDocument: "after" }
     );
 
     if (newSnoozeCount > 3) {
@@ -286,7 +286,7 @@ exports.updateStock = async (req, res) => {
     if (!med) return res.status(404).json({ message: "Medicine not found" });
 
     const isLow = stock <= med.refillAt;
-    const updated = await Medicine.findByIdAndUpdate(req.params.id, { $set: { stock, refillNotified: isLow } }, { new: true });
+    const updated = await Medicine.findByIdAndUpdate(req.params.id, { $set: { stock, refillNotified: isLow } }, { returnDocument: "after" });
 
     if (isLow) {
       sendPushToUser(med.userId, {

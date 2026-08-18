@@ -3,6 +3,7 @@ const Medicine = require("../models/Medicine");
 const DoseLog  = require("../models/DoseLog");
 const User     = require("../models/User");
 const CaregiverRelation = require("../models/CaregiverRelation");
+const SystemLock = require("../models/SystemLock");
 const { sendPushToUser } = require("./pushService");
 
 const getTimePeriod = (time) => {
@@ -66,17 +67,56 @@ const getAsiaKolkataDateTime = (d = new Date()) => {
   };
 };
 
+let isRunning = false;
+
 const startReminder = () => {
   cron.schedule("* * * * *", async () => {
     if (global.recordCronTick) global.recordCronTick();
 
+    // Part 1: In-process overlap protection
+    if (isRunning) return;
+    isRunning = true;
+
+    // Part 2: MongoDB Distributed Lock
+    // Generate unique token PER EXECUTION to prevent old lock release bugs
+    const crypto = require("crypto");
+    const executionToken = crypto.randomBytes(16).toString("hex");
+    
     const now = new Date();
-    const { today, currentTime, nowMinutes } = getAsiaKolkataDateTime(now);
+    // 3-minute lease safely covers worst-case valid execution times
+    const expires = new Date(now.getTime() + 180000); 
+    let lockAcquired = false;
 
     try {
+      try {
+        await SystemLock.create({ lockName: "reminder_cron", lockedAt: now, expiresAt: expires, lockedBy: executionToken });
+        lockAcquired = true;
+      } catch (err) {
+        if (err.code === 11000 || err.message?.includes("E11000")) {
+          const updated = await SystemLock.findOneAndUpdate(
+            { lockName: "reminder_cron", expiresAt: { $lt: now } },
+            { $set: { lockedAt: now, expiresAt: expires, lockedBy: executionToken } },
+            { returnDocument: "after" }
+          );
+          if (updated) lockAcquired = true;
+        } else {
+          throw err;
+        }
+      }
+
+      if (!lockAcquired) return; // Skip execution, another instance holds the lock
+
+      const { today, currentTime, nowMinutes } = getAsiaKolkataDateTime(now);
+
       // ── 1. Send push reminders at scheduled times ─────────
-      // We pull ALL medicines because a medicine might have multiple times per day.
-      const activeMeds = await Medicine.find({}).lean();
+      // Part 3: Replace Medicine.find({}) with targeted query
+      const activeMeds = await Medicine.find({
+        $or: [
+          { time: currentTime },
+          { times: currentTime },
+          { snoozedUntil: { $lte: now, $ne: null } }
+        ]
+      }).lean();
 
       for (const med of activeMeds) {
         try {
@@ -142,11 +182,29 @@ const startReminder = () => {
             if (parts.length < 2) continue; // Ensure lastReminderSent is well-formed
             const [sentDate, sentTime] = parts;
             
-            // Calculate elapsed time using system date components since reminder was sent
+            // Calculate elapsed time using abstract UTC mapping to bypass OS timezone
             const [year, month, day] = sentDate.split("-").map(Number);
             const [hour, minute] = sentTime.split(":").map(Number);
-            const sentDateObj = new Date(year, month - 1, day, hour, minute);
-            const diffMinutes = Math.floor((now - sentDateObj) / (1000 * 60));
+            const sentAsUTC = Date.UTC(year, month - 1, day, hour, minute);
+            
+            const tz = process.env.TZ || "Asia/Kolkata";
+            const formatter = new Intl.DateTimeFormat("en-US", {
+              timeZone: tz,
+              year: "numeric", month: "2-digit", day: "2-digit",
+              hour: "2-digit", minute: "2-digit", hour12: false
+            });
+            const fmtParts = formatter.formatToParts(now);
+            const getP = type => fmtParts.find(p => p.type === type).value;
+            
+            const currAsUTC = Date.UTC(
+              Number(getP("year")),
+              Number(getP("month")) - 1,
+              Number(getP("day")),
+              Number(getP("hour")) % 24,
+              Number(getP("minute"))
+            );
+            
+            const diffMinutes = Math.floor((currAsUTC - sentAsUTC) / (1000 * 60));
 
             if (diffMinutes < 5) continue;
 
@@ -222,21 +280,22 @@ const startReminder = () => {
           }
         }
 
-        // Real-time Low Stock Checks
+        // Part 4: Real-time Low Stock Checks (Optimized)
         try {
-          const lowStockMeds = await Medicine.find({ refillNotified: false }).lean();
+          const lowStockMeds = await Medicine.find({
+            refillNotified: false,
+            $expr: { $lte: ["$stock", "$refillAt"] }
+          }).lean();
           for (const med of lowStockMeds) {
-            if (med.stock <= med.refillAt) {
-              sendPushToUser(med.userId, {
-                title: `📦 Low Stock Alert: ${med.name}`,
-                body:  `Only ${med.stock} doses remaining for ${med.name} (refill threshold: ${med.refillAt}). Please refill soon!`,
-                icon:  "/logo192.png",
-                tag:   `refill-${med._id}`
-              }).catch(() => {});
+            sendPushToUser(med.userId, {
+              title: `📦 Low Stock Alert: ${med.name}`,
+              body:  `Only ${med.stock} doses remaining for ${med.name} (refill threshold: ${med.refillAt}). Please refill soon!`,
+              icon:  "/logo192.png",
+              tag:   `refill-${med._id}`
+            }).catch(() => {});
 
-              await Medicine.findByIdAndUpdate(med._id, { $set: { refillNotified: true } });
-              console.log(`📦 Real-time low stock alert sent: ${med.name} → user ${med.userId} (${med.stock} left)`);
-            }
+            await Medicine.findByIdAndUpdate(med._id, { $set: { refillNotified: true } });
+            console.log(`📦 Real-time low stock alert sent: ${med.name} → user ${med.userId} (${med.stock} left)`);
           }
         } catch (err) {
           console.error("Error processing real-time low stock medicines:", err.message);
@@ -260,6 +319,11 @@ const startReminder = () => {
 
     } catch (error) {
       console.error("Reminder cron error:", error.message);
+    } finally {
+      if (lockAcquired) {
+        await SystemLock.deleteOne({ lockName: "reminder_cron", lockedBy: executionToken }).catch(e => console.error("Error releasing lock:", e.message));
+      }
+      isRunning = false;
     }
   });
 

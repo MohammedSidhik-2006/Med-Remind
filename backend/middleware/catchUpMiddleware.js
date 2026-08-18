@@ -19,16 +19,36 @@ const catchUpMedicinesForUser = async (userId) => {
   const today = getLocalDate();
   const stale = await Medicine.find({ userId, lastResetDate: { $ne: today } });
 
-  for (const med of stale) {
-    if (med.lastResetDate) {
-      // Safely parse date elements to avoid UTC timezone offset conversions
+  if (stale.length === 0) return;
+
+  const minDate = stale.reduce((min, med) => {
+    if (!med.lastResetDate) return min;
+    if (!min) return med.lastResetDate;
+    return med.lastResetDate < min ? med.lastResetDate : min;
+  }, null);
+
+  if (minDate) {
+    const existingLogs = await DoseLog.find({
+      userId,
+      date: { $gte: minDate, $lt: today }
+    }).select("medicineId date scheduledTime").lean();
+
+    const existingSet = new Set(
+      existingLogs.map(l => `${l.medicineId.toString()}_${l.date}_${l.scheduledTime}`)
+    );
+
+    const logsToInsert = [];
+
+    for (const med of stale) {
+      if (!med.lastResetDate) continue;
+
       const [y, m, dayVal] = med.lastResetDate.split("-").map(Number);
-      let checkDate = new Date(y, m - 1, dayVal);
+      let checkDate = new Date(Date.UTC(y, m - 1, dayVal));
       
       const formatDate = (dateObj) => {
-        const yr = dateObj.getFullYear();
-        const mon = String(dateObj.getMonth() + 1).padStart(2, "0");
-        const dy = String(dateObj.getDate()).padStart(2, "0");
+        const yr = dateObj.getUTCFullYear();
+        const mon = String(dateObj.getUTCMonth() + 1).padStart(2, "0");
+        const dy = String(dateObj.getUTCDate()).padStart(2, "0");
         return `${yr}-${mon}-${dy}`;
       };
 
@@ -43,9 +63,9 @@ const catchUpMedicinesForUser = async (userId) => {
         if (isStartOk && isEndOk) {
           const allTimes = med.times && med.times.length > 0 ? med.times : [med.time];
           for (const t of allTimes) {
-            const exists = await DoseLog.findOne({ medicineId: med._id, date: checkDateStr, scheduledTime: t });
-            if (!exists) {
-              await DoseLog.create({
+            const key = `${med._id.toString()}_${checkDateStr}_${t}`;
+            if (!existingSet.has(key)) {
+              logsToInsert.push({
                 userId: med.userId,
                 medicineId: med._id,
                 medicineName: med.name,
@@ -54,15 +74,27 @@ const catchUpMedicinesForUser = async (userId) => {
                 scheduledTime: t,
                 status: "missed"
               });
+              existingSet.add(key); // Prevent duplicate pushing
             }
           }
         }
-        checkDate.setDate(checkDate.getDate() + 1);
+        checkDate.setUTCDate(checkDate.getUTCDate() + 1);
       }
     }
 
-    // Reset today's medicine fields for a clean start
-    await Medicine.findByIdAndUpdate(med._id, {
+    if (logsToInsert.length > 0) {
+      await DoseLog.insertMany(logsToInsert, { ordered: false }).catch(err => {
+        if (err.code !== 11000 && !err.message?.includes("E11000")) {
+          console.error("Bulk insert error in catchUp:", err.message);
+        }
+      });
+    }
+  }
+
+  const staleIds = stale.map(m => m._id);
+  await Medicine.updateMany(
+    { _id: { $in: staleIds } },
+    {
       $set: {
         taken: false,
         takenAt: null,
@@ -73,8 +105,8 @@ const catchUpMedicinesForUser = async (userId) => {
         snoozeCount: 0,
         lastResetDate: today
       }
-    });
-  }
+    }
+  );
 };
 
 const catchUpMiddleware = async (req, res, next) => {

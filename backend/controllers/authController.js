@@ -265,7 +265,10 @@ exports.forgotPassword = async (req, res) => {
 
     // Cryptographically secure 6-digit numeric OTP generator
     const code = crypto.randomInt(100000, 999999).toString();
-    user.resetPasswordCode = code;
+    
+    // Hash the code before storing so plaintext is never in the database
+    const hashedCode = await bcrypt.hash(code, 12);
+    user.resetPasswordCode = hashedCode;
     user.resetPasswordExpires = Date.now() + 15 * 60 * 1000; // 15 mins expiry
     await user.save();
 
@@ -292,7 +295,13 @@ exports.resetPassword = async (req, res) => {
     }
 
     const user = await User.findOne({ email });
-    if (!user || !user.resetPasswordCode || user.resetPasswordCode !== code || !user.resetPasswordExpires || user.resetPasswordExpires < Date.now()) {
+    if (!user || !user.resetPasswordCode || !user.resetPasswordExpires || user.resetPasswordExpires < Date.now()) {
+      return res.status(400).json({ message: "Invalid or expired verification code" });
+    }
+
+    // Securely compare submitted OTP with stored hash
+    const isMatch = await bcrypt.compare(code, user.resetPasswordCode);
+    if (!isMatch) {
       return res.status(400).json({ message: "Invalid or expired verification code" });
     }
 

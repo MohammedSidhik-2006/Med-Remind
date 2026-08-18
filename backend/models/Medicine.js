@@ -28,5 +28,7 @@ const medicineSchema = new mongoose.Schema({
 medicineSchema.index({ userId: 1, lastResetDate: 1 });
 medicineSchema.index({ taken: 1 });
 medicineSchema.index({ userId: 1, createdAt: 1 });
+medicineSchema.index({ confirmationPending: 1, taken: 1 }); // For escalation check
+medicineSchema.index({ refillNotified: 1 }); // For low stock check
 
 module.exports = mongoose.model("Medicine", medicineSchema);
