@@ -182,29 +182,34 @@ const startReminder = () => {
             if (parts.length < 2) continue; // Ensure lastReminderSent is well-formed
             const [sentDate, sentTime] = parts;
             
-            // Calculate elapsed time using abstract UTC mapping to bypass OS timezone
+            // Calculate elapsed time correctly using timezone-aware parsing
             const [year, month, day] = sentDate.split("-").map(Number);
             const [hour, minute] = sentTime.split(":").map(Number);
-            const sentAsUTC = Date.UTC(year, month - 1, day, hour, minute);
             
+            // Parse sent time correctly: create a date with the tz timezone context
             const tz = process.env.TZ || "Asia/Kolkata";
-            const formatter = new Intl.DateTimeFormat("en-US", {
-              timeZone: tz,
-              year: "numeric", month: "2-digit", day: "2-digit",
-              hour: "2-digit", minute: "2-digit", hour12: false
-            });
-            const fmtParts = formatter.formatToParts(now);
-            const getP = type => fmtParts.find(p => p.type === type).value;
             
-            const currAsUTC = Date.UTC(
-              Number(getP("year")),
-              Number(getP("month")) - 1,
-              Number(getP("day")),
-              Number(getP("hour")) % 24,
-              Number(getP("minute"))
-            );
+            // Helper: Create a Date object representing local time in the specified timezone
+            const createDateInTZ = (y, mo, d, h, mi) => {
+              // Create UTC date first
+              const utcDate = new Date(Date.UTC(y, mo - 1, d, h, mi));
+              // Get the difference between what this UTC time would show in the TZ vs UTC
+              const formatter = new Intl.DateTimeFormat("en-US", {
+                timeZone: tz,
+                year: "numeric", month: "2-digit", day: "2-digit",
+                hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false
+              });
+              const parts = formatter.formatToParts(utcDate);
+              const getP = type => parts.find(p => p.type === type).value;
+              const tzOffsetMS = utcDate - new Date(
+                `${getP("year")}-${getP("month")}-${getP("day")}T${getP("hour")}:${getP("minute")}:${getP("second")}Z`
+              );
+              return new Date(utcDate.getTime() - tzOffsetMS);
+            };
             
-            const diffMinutes = Math.floor((currAsUTC - sentAsUTC) / (1000 * 60));
+            const sentTime_ms = createDateInTZ(year, month, day, hour, minute).getTime();
+            const currTime_ms = now.getTime();
+            const diffMinutes = Math.floor((currTime_ms - sentTime_ms) / (1000 * 60));
 
             if (diffMinutes < 5) continue;
 

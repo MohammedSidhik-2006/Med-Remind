@@ -93,13 +93,17 @@ exports.deleteMedicine = async (req, res) => {
     const med = await Medicine.findOne({ _id: req.params.id, userId: req.user.id });
     if (!med) return res.status(404).json({ message: "Medicine not found" });
 
+    // Delete the medicine
     await Medicine.findByIdAndDelete(req.params.id);
 
+    // CASCADE: Delete all associated DoseLog entries to prevent orphaned records
+    await DoseLog.deleteMany({ medicineId: req.params.id });
+
     User.findById(req.user.id).select("email").then(u => {
-      AuditLog.create({ userId: req.user.id, userEmail: u?.email || "", action: "medicine_deleted", details: `Deleted: ${med.name}` }).catch(() => {});
+      AuditLog.create({ userId: req.user.id, userEmail: u?.email || "", action: "medicine_deleted", details: `Deleted: ${med.name} (and ${med._id} dose history)` }).catch(() => {});
     }).catch(() => {});
 
-    res.json({ message: "Medicine deleted" });
+    res.json({ message: "Medicine deleted successfully" });
   } catch (error) {
     console.error("deleteMedicine:", error.message);
     res.status(500).json({ message: "Server error" });
