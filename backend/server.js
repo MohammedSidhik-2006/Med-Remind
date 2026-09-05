@@ -26,8 +26,9 @@ app.use((req, res, next) => {
 });
 
 // ── CORS ──────────────────────────────────────────────────────
+const corsOrigin = process.env.CORS_ORIGIN || 'http://localhost:3000';
 app.use(cors({
-  origin: true,
+  origin: corsOrigin,
   credentials: true
 }));
 
@@ -39,6 +40,13 @@ app.use(express.json({ limit: "10kb" }));
 // ── Startup ───────────────────────────────────────────────────
 connectDB().then(() => {
   startReminder();
+  
+  // Start server only after DB connection succeeds
+  const PORT = process.env.PORT || 5000;
+  app.listen(PORT, "0.0.0.0", () => console.log(`Server running on port ${PORT} [${process.env.NODE_ENV || "development"}]`));
+}).catch((err) => {
+  console.error("❌ Failed to connect to MongoDB. Server will not start.");
+  process.exit(1);
 });
 
 // ── Cron monitoring ───────────────────────────────────────────
@@ -119,6 +127,3 @@ app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
 
 process.on("unhandledRejection", (reason) => { console.error("Unhandled Rejection:", reason); });
 process.on("uncaughtException", (err) => { console.error("Uncaught Exception:", err.message); process.exit(1); });
-
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, "0.0.0.0", () => console.log(`Server running on port ${PORT} [${process.env.NODE_ENV || "development"}]`));

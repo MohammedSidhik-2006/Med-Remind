@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <!-- Background -->
+  <rect width="192" height="192" fill="#0d9488" rx="32"/>
+  
+  <!-- Gradient -->
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0d9488;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0ea5e9;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <rect width="192" height="192" fill="url(#grad)" rx="32"/>
+  
+  <!-- Medical Cross (pill shape) -->
+  <g transform="translate(96, 96)">
+    <!-- Pill outline -->
+    <rect x="-35" y="-12" width="70" height="24" rx="12" fill="none" stroke="white" stroke-width="3"/>
+    
+    <!-- Pill divider -->
+    <line x1="0" y1="-12" x2="0" y2="12" stroke="white" stroke-width="2"/>
+    
+    <!-- Medicine drop indicator -->
+    <circle cx="-20" cy="-8" r="4" fill="white"/>
+    <circle cx="20" cy="8" r="4" fill="white"/>
+  </g>
+  
+  <!-- Heartbeat line -->
+  <g transform="translate(96, 60)">
+    <polyline points="20,20 30,20 35,10 40,20 50,20" stroke="white" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>
