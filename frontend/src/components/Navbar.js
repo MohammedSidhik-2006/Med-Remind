@@ -45,7 +45,6 @@ function Navbar({ onToggleSidebar }) {
   const fetchPendingMedicines = useCallback(async () => {
     try {
       const res = await API.get("/medicine");
-      // filter pending
       const pending = res.data.filter(m => m.confirmationPending && !m.taken);
       setPendingMeds(pending);
     } catch (err) {
@@ -66,14 +65,12 @@ function Navbar({ onToggleSidebar }) {
     navigate("/");
   };
 
-  // Format Date: e.g., "Saturday, August 1, 2026"
   const formattedDate = dateTime.toLocaleDateString("en-US", {
     weekday: "long",
     month: "long",
     day: "numeric"
   });
 
-  // Format Time: e.g., "10:18:05 PM"
   const formattedTime = dateTime.toLocaleTimeString("en-US", {
     hour: "2-digit",
     minute: "2-digit",
@@ -83,42 +80,41 @@ function Navbar({ onToggleSidebar }) {
 
   return (
     <header className="navbar">
-      {/* Brand & Mobile Hamburger Toggle */}
-      <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-        <button 
-          onClick={onToggleSidebar}
-          className="navbar-hamburger-btn"
-          title="Toggle Navigation"
-        >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="3" y1="12" x2="21" y2="12"></line>
-            <line x1="3" y1="6" x2="21" y2="6"></line>
-            <line x1="3" y1="18" x2="21" y2="18"></line>
-          </svg>
-        </button>
+      {/* LEFT: Hamburger Menu Button */}
+      <button 
+        onClick={onToggleSidebar}
+        className="navbar-hamburger-btn"
+        title="Toggle Navigation"
+      >
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="3" y1="12" x2="21" y2="12"></line>
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+      </button>
 
-        <div 
-          onClick={() => navigate("/dashboard")} 
-          className="navbar-brand-desktop"
-        >
-          <div className="navbar-logo-icon">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="12" y1="5" x2="12" y2="19"></line>
-              <line x1="5" y1="12" x2="19" y2="12"></line>
-            </svg>
-          </div>
-          <h3 className="navbar-logo-text">MedRemind</h3>
+      {/* CENTER: Brand (Desktop only) */}
+      <div 
+        onClick={() => navigate("/dashboard")} 
+        className="navbar-brand"
+      >
+        <div className="navbar-logo-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
         </div>
+        <h3 className="navbar-logo-text">MedRemind</h3>
       </div>
 
-      {/* Date & Time Widget (Center Panel) */}
+      {/* CENTER: Date & Time (Desktop only) */}
       <div className="navbar-datetime-widget">
         <span className="navbar-date">{formattedDate}</span>
         <span className="navbar-separator">|</span>
         <span className="navbar-time">{formattedTime}</span>
       </div>
 
-      {/* User Actions Panel (Right Panel) */}
+      {/* RIGHT: Notifications + Profile Icons */}
       <div className="navbar-user">
         {/* Notification Bell */}
         <div style={{ position: "relative" }}>
@@ -139,7 +135,7 @@ function Navbar({ onToggleSidebar }) {
             )}
           </button>
 
-          {/* Notifications Dropdown Drawer */}
+          {/* Notifications Dropdown */}
           {showNotifications && (
             <div className="navbar-dropdown notifications-dropdown">
               <div className="dropdown-header">
@@ -232,70 +228,87 @@ function Navbar({ onToggleSidebar }) {
       </div>
 
       <style>{`
+        /* HAMBURGER */
         .navbar-hamburger-btn {
           background: transparent;
           border: none;
           color: var(--text-main);
           cursor: pointer;
-          padding: 8px;
-          border-radius: var(--radius-sm);
-          transition: var(--transition-smooth);
-          display: none;
+          padding: 6px;
+          border-radius: 6px;
+          display: flex;
           align-items: center;
           justify-content: center;
+          width: 40px;
+          height: 40px;
+          flex-shrink: 0;
+          transition: all 0.2s ease;
         }
 
-        @media (max-width: 992px) {
-          .navbar-hamburger-btn {
+        .navbar-hamburger-btn:hover {
+          background: var(--primary-light);
+          color: var(--primary);
+        }
+
+        /* BRAND */
+        .navbar-brand {
+          display: none;
+          align-items: center;
+          gap: 8px;
+          cursor: pointer;
+          user-select: none;
+          white-space: nowrap;
+          flex-shrink: 0;
+        }
+
+        @media (min-width: 768px) {
+          .navbar-brand {
             display: flex;
           }
         }
 
-        .navbar-hamburger-btn:hover {
-          background: var(--border-light);
-          color: var(--primary);
-        }
-
-        .navbar-brand-desktop {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          cursor: pointer;
-          user-select: none;
-        }
-
         .navbar-logo-icon {
-          width: 32px;
-          height: 32px;
-          border-radius: 8px;
+          width: 28px;
+          height: 28px;
+          border-radius: 6px;
           background: linear-gradient(135deg, var(--primary) 0%, #0ea5e9 100%);
           display: flex;
           align-items: center;
           justify-content: center;
-          box-shadow: 0 4px 10px rgba(13, 148, 136, 0.2);
+          box-shadow: 0 2px 6px rgba(13, 148, 136, 0.15);
         }
 
         .navbar-logo-text {
-          font-size: 18px;
+          font-size: 15px;
           font-weight: 800;
           background: linear-gradient(135deg, var(--primary) 0%, #0ea5e9 100%);
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
+          background-clip: text;
           margin: 0;
         }
 
+        /* DATETIME */
         .navbar-datetime-widget {
-          display: flex;
+          display: none;
           align-items: center;
-          gap: 12px;
-          font-size: 13px;
+          gap: 10px;
+          font-size: 12px;
           font-weight: 600;
           color: var(--text-muted);
           background: white;
-          padding: 8px 18px;
-          border-radius: var(--radius-md);
+          padding: 6px 12px;
+          border-radius: 6px;
           border: 1px solid var(--border-light);
-          box-shadow: var(--shadow-sm);
+          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+          flex-shrink: 0;
+          white-space: nowrap;
+        }
+
+        @media (min-width: 1024px) {
+          .navbar-datetime-widget {
+            display: flex;
+          }
         }
 
         .navbar-separator {
@@ -305,13 +318,22 @@ function Navbar({ onToggleSidebar }) {
 
         .navbar-time {
           color: var(--primary);
-          font-family: monospace;
+          font-family: 'Courier New', monospace;
           font-weight: 700;
         }
 
+        /* USER ACTIONS - RIGHT SIDE */
+        .navbar-user {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          flex-shrink: 0;
+        }
+
+        /* BELL */
         .navbar-bell-btn {
-          width: 40px;
-          height: 40px;
+          width: 36px;
+          height: 36px;
           border-radius: 50%;
           background: white;
           border: 1px solid var(--border-light);
@@ -320,7 +342,9 @@ function Navbar({ onToggleSidebar }) {
           display: flex;
           align-items: center;
           justify-content: center;
-          transition: var(--transition-smooth);
+          transition: all 0.2s ease;
+          position: relative;
+          flex-shrink: 0;
         }
 
         .navbar-bell-btn:hover {
@@ -335,128 +359,134 @@ function Navbar({ onToggleSidebar }) {
 
         @keyframes pulse-ring {
           0% { box-shadow: 0 0 0 0 rgba(13, 148, 136, 0.4); }
-          70% { box-shadow: 0 0 0 6px rgba(13, 148, 136, 0); }
+          70% { box-shadow: 0 0 0 4px rgba(13, 148, 136, 0); }
           100% { box-shadow: 0 0 0 0 rgba(13, 148, 136, 0); }
         }
 
         .navbar-bell-badge {
           position: absolute;
-          top: -3px;
-          right: -3px;
+          top: -5px;
+          right: -5px;
           background: var(--danger);
           color: white;
-          font-size: 10px;
+          font-size: 9px;
           font-weight: 800;
-          min-width: 18px;
-          height: 18px;
-          border-radius: 9px;
+          min-width: 16px;
+          height: 16px;
+          border-radius: 8px;
           display: flex;
           align-items: center;
           justify-content: center;
           border: 2px solid white;
         }
 
+        /* AVATAR */
         .navbar-avatar-btn {
-          width: 40px;
-          height: 40px;
+          width: 36px;
+          height: 36px;
           border-radius: 50%;
           background: linear-gradient(135deg, var(--primary) 0%, #0ea5e9 100%);
           border: 2px solid white;
           color: white;
           font-weight: 750;
-          font-size: 13px;
+          font-size: 12px;
           cursor: pointer;
           display: flex;
           align-items: center;
           justify-content: center;
-          transition: var(--transition-smooth);
-          box-shadow: var(--shadow-sm);
+          transition: all 0.2s ease;
+          box-shadow: 0 2px 6px rgba(13, 148, 136, 0.12);
+          flex-shrink: 0;
         }
 
         .navbar-avatar-btn:hover {
           transform: scale(1.05);
-          box-shadow: 0 4px 12px rgba(13, 148, 136, 0.2);
         }
 
-        /* Dropdowns Styling */
+        /* DROPDOWNS */
         .navbar-dropdown {
           position: absolute;
-          top: calc(100% + 12px);
+          top: calc(100% + 8px);
           right: 0;
           background: white;
-          border-radius: var(--radius-md);
+          border-radius: 8px;
           border: 1px solid var(--border-light);
-          box-shadow: var(--shadow-lg);
+          box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
           z-index: 1010;
           display: flex;
           flex-direction: column;
           overflow: hidden;
-          animation: dropdown-fade-in 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+          animation: dropdown-fade 0.15s ease-out;
         }
 
-        @keyframes dropdown-fade-in {
-          from { transform: translateY(10px); opacity: 0; }
+        @keyframes dropdown-fade {
+          from { transform: translateY(-10px); opacity: 0; }
           to { transform: translateY(0); opacity: 1; }
         }
 
         .notifications-dropdown {
-          width: 320px;
+          width: 300px;
+          max-height: 350px;
         }
 
         .profile-dropdown {
-          width: 260px;
+          width: 240px;
         }
 
         .dropdown-header {
-          padding: 16px 20px;
+          padding: 14px 16px;
           border-bottom: 1px solid #e2e8f0;
           display: flex;
           justify-content: space-between;
           align-items: center;
+          gap: 8px;
         }
 
         .dropdown-header h4 {
-          font-size: 14px;
+          font-size: 13px;
           font-weight: 800;
           color: var(--text-main);
+          margin: 0;
         }
 
         .alert-count-badge {
           background: var(--danger-light);
           color: var(--danger);
-          padding: 2px 8px;
-          border-radius: 12px;
-          font-size: 11px;
+          padding: 2px 6px;
+          border-radius: 10px;
+          font-size: 10px;
           font-weight: 700;
+          white-space: nowrap;
         }
 
         .dropdown-body {
-          padding: 8px;
+          padding: 6px;
           display: flex;
           flex-direction: column;
-          gap: 4px;
-          max-height: 280px;
+          gap: 2px;
+          max-height: 240px;
           overflow-y: auto;
         }
 
         .empty-dropdown {
           text-align: center;
-          padding: 30px 16px;
+          padding: 24px 14px;
           color: var(--text-light);
         }
 
         .empty-dropdown p {
-          font-size: 12px;
+          font-size: 11px;
           font-weight: 600;
+          margin: 0;
         }
 
         .notification-dropdown-item {
           display: flex;
-          gap: 12px;
-          padding: 10px 12px;
-          border-radius: 8px;
+          gap: 10px;
+          padding: 8px 10px;
+          border-radius: 6px;
           cursor: pointer;
-          transition: var(--transition-smooth);
+          transition: all 0.15s ease;
         }
 
         .notification-dropdown-item:hover {
@@ -464,13 +494,13 @@ function Navbar({ onToggleSidebar }) {
         }
 
         .notification-item-icon {
-          width: 32px;
-          height: 32px;
-          border-radius: 8px;
+          width: 28px;
+          height: 28px;
+          border-radius: 6px;
           background: var(--warning-light);
           color: var(--warning-hover);
           font-weight: 700;
-          font-size: 12px;
+          font-size: 11px;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -482,26 +512,26 @@ function Navbar({ onToggleSidebar }) {
         }
 
         .notification-item-title {
-          font-size: 12px;
-          font-weight: 750;
+          font-size: 11px;
+          font-weight: 700;
           color: var(--text-main);
-          margin-bottom: 2px;
         }
 
         .notification-item-info p {
-          font-size: 11px;
+          font-size: 10px;
           color: var(--text-light);
+          margin: 2px 0 0 0;
         }
 
-        /* Profile Dropdown Specifics */
+        /* PROFILE DROPDOWN */
         .dropdown-header.user-card {
-          gap: 12px;
+          gap: 10px;
           justify-content: flex-start;
         }
 
         .user-card-avatar {
-          width: 44px;
-          height: 44px;
+          width: 38px;
+          height: 38px;
           border-radius: 50%;
           background: var(--primary-light);
           color: var(--primary);
@@ -509,41 +539,44 @@ function Navbar({ onToggleSidebar }) {
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 14px;
+          font-size: 12px;
+          flex-shrink: 0;
         }
 
         .user-card-info {
           display: flex;
           flex-direction: column;
+          gap: 1px;
         }
 
         .user-name {
-          font-size: 14px;
+          font-size: 12px;
           font-weight: 800;
           color: var(--text-main);
+          margin: 0;
         }
 
         .user-role {
-          font-size: 11px;
+          font-size: 10px;
           color: var(--text-light);
           font-weight: 600;
-          margin-top: 1px;
+          margin: 0;
         }
 
         .profile-dropdown .dropdown-body button {
           display: flex;
           align-items: center;
-          gap: 10px;
-          padding: 10px 12px;
+          gap: 8px;
+          padding: 8px 10px;
           background: transparent;
           border: none;
           color: var(--text-muted);
-          border-radius: 8px;
-          font-size: 13px;
+          border-radius: 6px;
+          font-size: 12px;
           font-weight: 600;
           text-align: left;
           cursor: pointer;
-          transition: var(--transition-smooth);
+          transition: all 0.15s ease;
           width: 100%;
         }
 
@@ -553,7 +586,7 @@ function Navbar({ onToggleSidebar }) {
         }
 
         .dropdown-footer {
-          padding: 8px;
+          padding: 6px;
           border-top: 1px solid #e2e8f0;
           background: #f8fafc;
         }
@@ -564,10 +597,11 @@ function Navbar({ onToggleSidebar }) {
           border: none;
           color: var(--primary);
           font-weight: 700;
-          font-size: 12px;
-          padding: 8px;
+          font-size: 11px;
+          padding: 6px;
           cursor: pointer;
-          border-radius: 6px;
+          border-radius: 5px;
+          transition: all 0.15s ease;
         }
 
         .dropdown-footer button:hover {
@@ -582,12 +616,19 @@ function Navbar({ onToggleSidebar }) {
           background: var(--danger-light);
         }
 
-        @media (max-width: 992px) {
-          .navbar {
-            padding: 16px 24px;
+        @media (max-width: 576px) {
+          .notifications-dropdown {
+            width: calc(100vw - 24px);
+            max-width: 280px;
+            left: 12px;
+            right: auto;
           }
-          .navbar-datetime-widget {
-            display: none;
+
+          .profile-dropdown {
+            width: calc(100vw - 24px);
+            max-width: 260px;
+            right: 12px;
+            left: auto;
           }
         }
       `}</style>

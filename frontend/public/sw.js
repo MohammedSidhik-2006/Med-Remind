@@ -13,8 +13,8 @@ self.addEventListener("push", (event) => {
   const title   = data.title || "MedRemind";
   const options = {
     body:             data.body  || "",
-    icon:             data.icon  || "/logo192.png",
-    badge:            "/logo192.png",
+    icon:             data.icon  || "/medremind-icon-192.svg",
+    badge:            "/medremind-icon-192.svg",
     tag:              data.tag   || "medremind",
     requireInteraction: true,
     data:             { url: self.location.origin }

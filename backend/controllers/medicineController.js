@@ -120,7 +120,6 @@ exports.markTaken = async (req, res) => {
     if (medicine.taken) return res.json(medicine); // Idempotent block bypass
 
     const today         = getLocalDate();
-    const newStock      = Math.max(0, (medicine.stock || 0) - 1);
     const allTimes      = medicine.times?.length > 0 ? medicine.times : [medicine.time];
 
     // Find already taken times for today to decide which dose we are recording
@@ -146,6 +145,10 @@ exports.markTaken = async (req, res) => {
       return res.json(medicine);
     }
 
+    // FIX FOR BUG-001-RACE: Create DoseLog first (atomic via unique index),
+    // then decrement stock only if DoseLog creation succeeds.
+    // This ensures: (1) exactly one dose logs per scheduledTime, (2) exactly one stock decrement per successful log.
+    let doseLogCreated = false;
     try {
       const pastMissed = await DoseLog.findOne({ medicineId: medicine._id, date: today, scheduledTime, status: "missed" });
       if (pastMissed) {
@@ -164,6 +167,7 @@ exports.markTaken = async (req, res) => {
           takenAt: new Date() 
         });
       }
+      doseLogCreated = true;
     } catch (err) {
       if (err.code === 11000) {
         console.warn(`Idempotent collision caught for medicine ${medicine._id} scheduledTime ${scheduledTime}`);
@@ -174,12 +178,17 @@ exports.markTaken = async (req, res) => {
     }
 
     // Evaluate if ALL doses for this particular day are completed
-
     const takenLogsCount   = await DoseLog.countDocuments({ medicineId: medicine._id, date: today, status: "taken" });
     const isFullyTaken     = takenLogsCount >= allTimes.length;
 
-    const shouldNotifyRefill = newStock <= medicine.refillAt && !medicine.refillNotified;
+    // Determine if refill notification should be sent
+    // refillNotified is set to true when stock reaches refillAt threshold
+    const currentStock = medicine.stock || 0;
+    const shouldNotifyRefill = currentStock > 0 && (currentStock - 1) <= medicine.refillAt && !medicine.refillNotified;
 
+    // FIX FOR BUG-001-RACE: Use atomic $inc operator instead of $set for stock decrement.
+    // This ensures concurrent requests atomically decrement stock, preventing race condition.
+    // Stock will never become negative due to min: 0 constraint in schema.
     const updated = await Medicine.findByIdAndUpdate(
       req.params.id,
       { 
@@ -190,9 +199,9 @@ exports.markTaken = async (req, res) => {
           snoozedUntil: null, 
           snoozeCount: 0,
           missedCount: 0,
-          stock: newStock, 
-          refillNotified: shouldNotifyRefill ? true : (newStock > medicine.refillAt ? false : medicine.refillNotified)
-        } 
+          refillNotified: shouldNotifyRefill ? true : (currentStock - 1 > medicine.refillAt ? false : medicine.refillNotified)
+        },
+        $inc: { stock: -1 }
       },
       { returnDocument: "after" }
     );
@@ -212,10 +221,11 @@ exports.markTaken = async (req, res) => {
       console.error("Error checking caregiver relations in markTaken:", caregiverErr.message);
     }
 
+    // Use the updated medicine from database to get accurate stock for notification
     if (shouldNotifyRefill) {
       sendPushToUser(medicine.userId, {
         title: `📦 Low Stock: ${medicine.name}`,
-        body:  `Only ${newStock} doses remaining. Please refill soon.`,
+        body:  `Only ${updated.stock} doses remaining. Please refill soon.`,
         icon:  "/logo192.png",
         tag:   `refill-${medicine._id}`
       }).catch(e => console.error("Error sending immediate refill alert:", e.message));

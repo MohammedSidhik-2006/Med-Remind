@@ -2,6 +2,7 @@ const User = require("../models/User");
 const Medicine = require("../models/Medicine");
 const DoseLog = require("../models/DoseLog");
 const AuditLog = require("../models/AuditLog");
+const CaregiverRelation = require("../models/CaregiverRelation");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
@@ -169,6 +170,14 @@ exports.deleteAccount = async (req, res) => {
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(401).json({ message: "Incorrect password" });
 
+    // FIX FOR BUG-002-ORPHAN: Delete CaregiverRelation records where user is either patient or caregiver
+    await CaregiverRelation.deleteMany({
+      $or: [
+        { patientId: req.user.id },
+        { caregiverId: req.user.id }
+      ]
+    });
+
     await DoseLog.deleteMany({ userId: req.user.id });
     await AuditLog.deleteMany({ userId: req.user.id });
     await Medicine.deleteMany({ userId: req.user.id });
@@ -198,7 +207,9 @@ const sendResetEmail = async (email, code) => {
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS
-      }
+      },
+      connectionTimeout: 5000,
+      socketTimeout: 5000
     });
   } else if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
     transporter = nodemailer.createTransport({
@@ -221,7 +232,9 @@ const sendResetEmail = async (email, code) => {
         }
       });
     } catch (e) {
-      console.log("Failed to initialize ethereal test mail transporter, falling back to console logging.");
+      console.warn("Failed to initialize ethereal test mail transporter:", e.message);
+      console.warn("Email will not be sent. Use SMTP_HOST or EMAIL_USER configuration.");
+      transporter = null;
     }
   }
 
@@ -239,14 +252,20 @@ const sendResetEmail = async (email, code) => {
   if (transporter) {
     try {
       const info = await transporter.sendMail(mailOptions);
-      console.log(`Reset email sent: ${info.messageId}`);
+      console.log(`✅ Reset email sent: ${info.messageId}`);
       const testUrl = nodemailer.getTestMessageUrl(info);
       if (testUrl) {
-        console.log(`Ethereal Reset Mail URL: ${testUrl}`);
+        console.log(`📬 Ethereal Preview URL: ${testUrl}`);
       }
+      return true;
     } catch (err) {
-      console.error("Error sending reset email:", err.message);
+      console.error("❌ Error sending reset email:", err.message);
+      return false;
     }
+  } else {
+    console.warn("⚠️  No email transporter configured. Reset code generated but not sent.");
+    console.warn("💡 TIP: The code is: " + code + " (check console logs)");
+    return false;
   }
 };
 

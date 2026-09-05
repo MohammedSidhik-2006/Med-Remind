@@ -373,21 +373,46 @@ body {
   background: rgba(255, 255, 255, 0.8) !important;
   backdrop-filter: blur(20px) saturate(180%) !important;
   -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
-  padding: 18px 48px;
+  padding: 12px 16px;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
   border-bottom: 1px solid var(--border-glass) !important;
   position: sticky;
   top: 0;
-  z-index: 100;
+  z-index: 500;
   box-shadow: 0 8px 30px rgba(15, 23, 42, 0.04) !important;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: auto;
+}
+
+@media (min-width: 993px) {
+  .navbar {
+    padding: 12px 20px;
+    gap: 16px;
+  }
+}
+
+@media (max-width: 576px) {
+  .navbar {
+    padding: 10px 12px;
+    gap: 8px;
+  }
 }
 
 .navbar-user {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+@media (max-width: 576px) {
+  .navbar-user {
+    gap: 8px;
+  }
 }
 
 .user-greeting {
@@ -418,6 +443,8 @@ body {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  overflow-x: hidden;
+  width: 100%;
 }
 
 .main-layout-content {
@@ -426,11 +453,14 @@ body {
   display: flex;
   flex-direction: column;
   transition: margin-left 0.3s ease;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 @media (max-width: 992px) {
   .main-layout-content {
     margin-left: 0;
+    width: 100%;
   }
 }
 
@@ -439,6 +469,19 @@ body {
   margin: 0 auto;
   padding: 40px 24px;
   width: 100%;
+  box-sizing: border-box;
+}
+
+@media (max-width: 768px) {
+  .dashboard {
+    padding: 32px 16px;
+  }
+}
+
+@media (max-width: 576px) {
+  .dashboard {
+    padding: 20px 12px;
+  }
 }
 
 .dashboard-hero {
@@ -593,19 +636,6 @@ body {
   overflow: hidden;
 }
 
-.stat-dashboard-card::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 4px;
-}
-
-.stat-dashboard-card.taken::before { background: var(--success); }
-.stat-dashboard-card.pending::before { background: var(--warning); }
-.stat-dashboard-card.missed::before { background: var(--danger); }
-
 .stat-label {
   font-size: 12px;
   font-weight: 700;
@@ -619,6 +649,20 @@ body {
   font-weight: 800;
   color: var(--text-main);
   margin-top: 10px;
+}
+
+@media (max-width: 576px) {
+  .stat-dashboard-card {
+    padding: 16px;
+  }
+  
+  .stat-label {
+    font-size: 10px;
+  }
+  
+  .stat-val {
+    font-size: 22px;
+  }
 }
 
 /* ─── Timeline Schedules & Medicine Lists ────────────── */
@@ -1238,6 +1282,14 @@ tr:hover td {
   .auth-title, .auth-subtitle {
     text-align: center;
   }
+  
+  .navbar {
+    padding: 16px 20px;
+  }
+  
+  .navbar-datetime-widget {
+    display: none;
+  }
 }
 
 @media (max-width: 768px) {
@@ -1330,4 +1382,110 @@ tr:hover td {
 }
 .sidebar-aside ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.3);
+}
+
+
+/* ─── Enhanced Mobile Responsiveness (Sep 2026 Fix) ──────── */
+
+@media (max-width: 768px) {
+  .medicine-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 16px;
+  }
+  
+  .medicine-icon {
+    margin-right: 0;
+  }
+
+  .medicine-info {
+    width: 100%;
+  }
+
+  .medicine-actions {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 8px;
+    border-top: 1px solid var(--border-light);
+    padding-top: 12px;
+  }
+
+  .mark-taken-btn,
+  .delete-btn {
+    flex: 1;
+    min-width: 80px;
+  }
+}
+
+@media (max-width: 576px) {
+  .medicine-card {
+    padding: 12px;
+    gap: 12px;
+  }
+  
+  .medicine-icon {
+    width: 40px;
+    height: 40px;
+    font-size: 18px;
+  }
+  
+  .medicine-name {
+    font-size: 14px;
+  }
+  
+  .medicine-details {
+    font-size: 12px;
+    gap: 12px;
+  }
+
+  .mark-taken-btn,
+  .delete-btn {
+    font-size: 12px;
+    padding: 8px 12px;
+  }
+
+  /* Improve stat cards on narrow screens */
+  .stat-dashboard-card {
+    padding: 14px;
+  }
+  
+  .stat-label {
+    font-size: 10px;
+  }
+  
+  .stat-val {
+    font-size: 20px;
+  }
+
+  /* Improve hero section on mobile */
+  .dashboard-hero {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 20px 16px;
+  }
+
+  .hero-date-box {
+    text-align: left;
+    align-self: flex-start;
+  }
+
+  /* Better quick actions on mobile */
+  .quick-actions-grid {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  }
+
+  .quick-action-tile {
+    padding: 14px 12px;
+  }
+
+  .tile-title {
+    font-size: 12px;
+  }
+
+  .tile-sub {
+    font-size: 10px;
+  }
 }

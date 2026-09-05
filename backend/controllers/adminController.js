@@ -4,6 +4,7 @@ const Medicine    = require("../models/Medicine");
 const AuditLog    = require("../models/AuditLog");
 const MedDatabase = require("../models/MedDatabase");
 const DoseLog     = require("../models/DoseLog");
+const CaregiverRelation = require("../models/CaregiverRelation");
 const { sendPushNotification } = require("../services/pushService");
 
 const getLocalDate = (d = new Date()) => {
@@ -157,6 +158,14 @@ exports.deleteUser = async (req, res) => {
        return res.status(400).json({ message: "Cannot delete another admin account directly" });
     }
     
+    // FIX FOR BUG-003-ORPHAN-ADMIN: Delete CaregiverRelation records where user is either patient or caregiver
+    await CaregiverRelation.deleteMany({
+      $or: [
+        { patientId: userId },
+        { caregiverId: userId }
+      ]
+    });
+
     // Cascading delete
     await Medicine.deleteMany({ userId });
     await DoseLog.deleteMany({ userId });

@@ -158,7 +158,7 @@ const startReminder = () => {
             sendPushToUser(med.userId, {
               title: `💊 Time to take ${med.name}${isSnoozeMaturing ? " (Snoozed)" : ""}`,
               body:  `${med.dosage} — ${period} (scheduled: ${originalScheduledTime}, now: ${currentTime}). Open MedRemind to confirm.`,
-              icon:  "/logo192.png",
+              icon:  "/medremind-icon-192.svg",
               tag:   `reminder-${med._id}-${currentTime}`
             }).then((ok) => {
               if (ok) console.log(`✅ Push sent: ${med.name} → user ${med.userId} at ${currentTime} (scheduled: ${originalScheduledTime})`);
@@ -249,7 +249,7 @@ const startReminder = () => {
                       sendPushToUser(rel.caregiverId, {
                         title: `🚨 Missed Dose Locked: ${patientName}`,
                         body: `FINAL NOTICE: ${patientName} failed to confirm taking ${med.name} (${med.dosage}) after ${threshold} attempts (${threshold * 5} minutes). This dose is locked as missed.`,
-                        icon: "/logo192.png",
+                        icon: "/medremind-icon-192.svg",
                         tag: `missed-locked-caregiver-${med._id}-${sentTime}-${Date.now()}`
                       }).catch(e => console.error("Error sending locked missed dose push to caregiver:", e.message));
                     }
@@ -263,7 +263,7 @@ const startReminder = () => {
               sendPushToUser(med.userId, {
                 title: `🚨 Dose Locked: Missed ${med.name}`,
                 body:  `You missed ${med.name} at ${sentTime}. Reminders have stopped and this dose is locked as missed.`,
-                icon:  "/logo192.png",
+                icon:  "/medremind-icon-192.svg",
                 tag:   `missed-locked-${med._id}`
               }).catch(() => {});
 
@@ -273,7 +273,7 @@ const startReminder = () => {
               sendPushToUser(med.userId, {
                 title: `⏰ Reminder (${newMissedCount + 1}/${threshold}): Take ${med.name}`,
                 body:  `Urgent: Please take ${med.name} (${med.dosage}) scheduled at ${sentTime}. Attempt ${newMissedCount + 1} of ${threshold}.`,
-                icon:  "/logo192.png",
+                icon:  "/medremind-icon-192.svg",
                 tag:   `missed-${med._id}-${newMissedCount}`
               }).catch(() => {});
 
@@ -295,7 +295,7 @@ const startReminder = () => {
             sendPushToUser(med.userId, {
               title: `📦 Low Stock Alert: ${med.name}`,
               body:  `Only ${med.stock} doses remaining for ${med.name} (refill threshold: ${med.refillAt}). Please refill soon!`,
-              icon:  "/logo192.png",
+              icon:  "/medremind-icon-192.svg",
               tag:   `refill-${med._id}`
             }).catch(() => {});
 
