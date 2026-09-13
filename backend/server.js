@@ -26,9 +26,16 @@ app.use((req, res, next) => {
 });
 
 // ── CORS ──────────────────────────────────────────────────────
-const corsOrigin = process.env.CORS_ORIGIN || 'http://localhost:3000';
+const corsOrigin = process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : ['http://localhost:3000'];
 app.use(cors({
-  origin: corsOrigin,
+  origin: function(origin, callback) {
+    if (!origin || corsOrigin.includes(origin) || corsOrigin.includes('*')) {
+      callback(null, true);
+    } else {
+      console.error(`CORS blocked origin: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true
 }));
 

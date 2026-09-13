@@ -2,7 +2,8 @@ import axios from "axios";
 
 const getBaseURL = () => {
   if (process.env.REACT_APP_API_URL) {
-    return process.env.REACT_APP_API_URL;
+    const url = process.env.REACT_APP_API_URL;
+    return url.endsWith('/api') ? url : `${url.replace(/\/$/, '')}/api`;
   }
   const hostname = window.location.hostname || "localhost";
   return `http://${hostname}:5000/api`;
