@@ -8,6 +8,21 @@ const urlBase64ToUint8Array = (base64String) => {
   return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
 };
 
+// Get the raw backend BASE url (without /api) for VAPID/subscription endpoints
+// because those routes are registered at /api/vapid-public-key etc., and the
+// axios instance already appends /api — so we must bypass it here.
+const getBackendBase = () => {
+  if (process.env.REACT_APP_API_URL) {
+    // Strip trailing /api if present to get the bare origin
+    return process.env.REACT_APP_API_URL.replace(/\/api\/?$/, "").replace(/\/+$/, "");
+  }
+  const hostname = window.location.hostname;
+  if (hostname === "localhost" || hostname === "127.0.0.1") {
+    return "http://localhost:5000";
+  }
+  return "";
+};
+
 export const setupPushNotifications = async () => {
   try {
     if (!("Notification" in window)) {
@@ -35,9 +50,12 @@ export const setupPushNotifications = async () => {
     await registration.update();
     await navigator.serviceWorker.ready;
 
-    // 3. Fetch VAPID public key from backend
-    const { data } = await API.get("/vapid-public-key");
-    const applicationServerKey = urlBase64ToUint8Array(data.publicKey);
+    // 3. Fetch VAPID public key — use raw backend URL (not axios /api base)
+    const backendBase = getBackendBase();
+    const vapidRes = await fetch(`${backendBase}/api/vapid-public-key`);
+    if (!vapidRes.ok) throw new Error(`VAPID key fetch failed: ${vapidRes.status}`);
+    const vapidData = await vapidRes.json();
+    const applicationServerKey = urlBase64ToUint8Array(vapidData.publicKey);
 
     // 4. Subscribe via PushManager
     let subscription = await registration.pushManager.getSubscription();
@@ -48,7 +66,7 @@ export const setupPushNotifications = async () => {
       });
     }
 
-    // 5. Send subscription to backend
+    // 5. Send subscription to backend via authenticated axios (correct path)
     const sub = subscription.toJSON();
     await API.post("/save-subscription", {
       endpoint: sub.endpoint,

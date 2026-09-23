@@ -28,10 +28,12 @@ const catchUpMedicinesForUser = async (userId) => {
   }, null);
 
   if (minDate) {
+    // Fetch ALL logs regardless of status — the unique index is on (medicineId, date, scheduledTime)
+    // so a 'taken' log already occupies the slot and we must NOT insert a 'missed' log for it.
     const existingLogs = await DoseLog.find({
       userId,
       date: { $gte: minDate, $lt: today }
-    }).select("medicineId date scheduledTime").lean();
+    }).select("medicineId date scheduledTime status").lean();
 
     const existingSet = new Set(
       existingLogs.map(l => `${l.medicineId.toString()}_${l.date}_${l.scheduledTime}`)

@@ -108,12 +108,15 @@ exports.getProfile = async (req, res) => {
       return true;
     });
 
+    // Count doses taken TODAY from DoseLog — not from medicine.taken which resets at midnight
+    const takenTodayCount = await DoseLog.countDocuments({ userId: req.user.id, date: today, status: "taken" });
+
     res.json({
       user,
       stats: {
         totalMedicines:  medicines.length,
         activeMedicines: active.length,
-        takenToday:      active.filter(m => m.taken).length,
+        takenToday:      takenTodayCount,
         lowStock:        medicines.filter(m => m.stock <= m.refillAt).length
       }
     });
