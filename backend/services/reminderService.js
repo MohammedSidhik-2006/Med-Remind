@@ -155,11 +155,13 @@ const startReminder = () => {
             });
 
             // Fire-and-forget push notification to avoid sequential network block
+            // Tag is stable per medicine+scheduledSlot — each new push REPLACES the
+            // previous notification for this slot on the phone. No stacking.
             sendPushToUser(med.userId, {
               title: `💊 Time to take ${med.name}${isSnoozeMaturing ? " (Snoozed)" : ""}`,
-              body:  `${med.dosage} — ${period} (scheduled: ${originalScheduledTime}, now: ${currentTime}). Open MedRemind to confirm.`,
+              body:  `${med.dosage} — ${period}. Scheduled: ${originalScheduledTime}. Open MedRemind to confirm.`,
               icon:  "/medremind-icon-192.svg",
-              tag:   `reminder-${med._id}-${currentTime}`
+              tag:   `med-${med._id}-${originalScheduledTime}`
             }).then((ok) => {
               if (ok) console.log(`✅ Push sent: ${med.name} → user ${med.userId} at ${currentTime} (scheduled: ${originalScheduledTime})`);
             }).catch((e) => {
@@ -247,10 +249,11 @@ const startReminder = () => {
                   if (relations.length > 0) {
                     for (const rel of relations) {
                       sendPushToUser(rel.caregiverId, {
-                        title: `🚨 Missed Dose Locked: ${patientName}`,
-                        body: `FINAL NOTICE: ${patientName} failed to confirm taking ${med.name} (${med.dosage}) after ${threshold} attempts (${threshold * 5} minutes). This dose is locked as missed.`,
+                        title: `🚨 Missed Dose Alert: ${patientName}`,
+                        body: `${patientName} failed to take ${med.name} (${med.dosage}) after ${threshold} reminders (${threshold * 5} min). Dose is locked as missed.`,
                         icon: "/medremind-icon-192.svg",
-                        tag: `missed-locked-caregiver-${med._id}-${sentTime}-${Date.now()}`
+                        // Stable tag: one notification per patient+medicine+slot on caregiver's phone
+                        tag: `caregiver-missed-${rel.patientId}-${med._id}-${sentTime}`
                       }).catch(e => console.error("Error sending locked missed dose push to caregiver:", e.message));
                     }
                   }
@@ -259,22 +262,24 @@ const startReminder = () => {
                 }
               }
 
-              // Send definitive push warning to user
+              // Send definitive locked push — same tag replaces all previous reminders
               sendPushToUser(med.userId, {
-                title: `🚨 Dose Locked: Missed ${med.name}`,
-                body:  `You missed ${med.name} at ${sentTime}. Reminders have stopped and this dose is locked as missed.`,
+                title: `🚨 Dose Locked as Missed: ${med.name}`,
+                body:  `You missed ${med.name} (${med.dosage}) at ${sentTime} after ${threshold} reminders. This dose is now locked.`,
                 icon:  "/medremind-icon-192.svg",
-                tag:   `missed-locked-${med._id}`
+                tag:   `med-${med._id}-${sentTime}`
               }).catch(() => {});
 
               console.log(`🔒 Dose locked after reaching threshold (${threshold}x): ${med.name} → user ${med.userId}`);
             } else {
-              // Regular escalation push warning sent to user during the 5-minute interval checks
+              // Regular escalation push — reuses the SAME tag as the initial reminder
+              // so it REPLACES the previous notification. Phone shows one notification
+              // per medicine, always updated with the latest count.
               sendPushToUser(med.userId, {
-                title: `⏰ Reminder (${newMissedCount + 1}/${threshold}): Take ${med.name}`,
-                body:  `Urgent: Please take ${med.name} (${med.dosage}) scheduled at ${sentTime}. Attempt ${newMissedCount + 1} of ${threshold}.`,
+                title: `⏰ Reminder ${newMissedCount + 1}/${threshold}: Take ${med.name}`,
+                body:  `Please take ${med.name} (${med.dosage}) — scheduled at ${sentTime}. This is reminder ${newMissedCount + 1} of ${threshold}.`,
                 icon:  "/medremind-icon-192.svg",
-                tag:   `missed-${med._id}-${newMissedCount}`
+                tag:   `med-${med._id}-${sentTime}`
               }).catch(() => {});
 
               await Medicine.findByIdAndUpdate(med._id, { $set: { missedCount: newMissedCount } });

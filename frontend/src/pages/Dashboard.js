@@ -29,6 +29,10 @@ function Dashboard() {
   // Sidebar State
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
+  // Push permission prompt banner
+  const [showPushBanner, setShowPushBanner] = useState(false);
+  const [pushEnabling, setPushEnabling] = useState(false);
+
   // Statistics State
   const [streak, setStreak] = useState(0);
   const [longestStreak, setLongestStreak] = useState(0);
@@ -131,6 +135,14 @@ function Dashboard() {
         setupPushNotifications().catch(err => {
           console.error("Auto setup push notifications failed:", err);
         });
+      } else if (
+        // Show the banner if permission not yet decided AND user hasn't dismissed it before
+        "Notification" in window &&
+        Notification.permission === "default" &&
+        !localStorage.getItem("pushPromptDismissed")
+      ) {
+        // Delay slightly so the page settles before showing the banner
+        setTimeout(() => setShowPushBanner(true), 2000);
       }
 
       // Force background Service Worker eviction if a cached, broken version exists.
@@ -143,6 +155,30 @@ function Dashboard() {
       return () => clearInterval(interval);
     }
   }, [navigate, fetchMedicines, fetchReportsData]);
+
+  const handleEnablePush = async () => {
+    setPushEnabling(true);
+    try {
+      const ok = await setupPushNotifications();
+      if (ok) {
+        setShowPushBanner(false);
+      } else {
+        // Permission denied or failed — don't nag again
+        setShowPushBanner(false);
+        localStorage.setItem("pushPromptDismissed", "1");
+      }
+    } catch (err) {
+      console.error("Push enable failed:", err);
+      setShowPushBanner(false);
+    } finally {
+      setPushEnabling(false);
+    }
+  };
+
+  const handleDismissPushBanner = () => {
+    setShowPushBanner(false);
+    localStorage.setItem("pushPromptDismissed", "1");
+  };
 
   // Greetings and motivational quotes
   const getUserName = () => {
@@ -177,6 +213,55 @@ function Dashboard() {
       {/* Main Layout Area Shifted on Desktop */}
       <div className="main-layout-content">
         <Navbar onToggleSidebar={() => setIsSidebarOpen(true)} />
+
+        {/* Push Notification Permission Banner */}
+        {showPushBanner && (
+          <div style={{
+            background: "linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)",
+            color: "white",
+            padding: "14px 20px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "12px",
+            flexWrap: "wrap",
+            zIndex: 100,
+            boxShadow: "0 2px 12px rgba(79,70,229,0.4)"
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1 }}>
+              <span style={{ fontSize: "22px" }}>🔔</span>
+              <div>
+                <div style={{ fontWeight: "800", fontSize: "14px" }}>Enable Medication Reminders</div>
+                <div style={{ fontSize: "12px", opacity: 0.85, marginTop: "2px" }}>
+                  Get notified even when the app is closed — like Flipkart order alerts.
+                </div>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+              <button
+                onClick={handleEnablePush}
+                disabled={pushEnabling}
+                style={{
+                  padding: "9px 20px", background: "white", color: "#4f46e5",
+                  border: "none", borderRadius: "8px", fontWeight: "800",
+                  fontSize: "13px", cursor: "pointer", opacity: pushEnabling ? 0.7 : 1
+                }}
+              >
+                {pushEnabling ? "Enabling..." : "Enable Now"}
+              </button>
+              <button
+                onClick={handleDismissPushBanner}
+                style={{
+                  padding: "9px 14px", background: "rgba(255,255,255,0.15)",
+                  color: "white", border: "1px solid rgba(255,255,255,0.3)",
+                  borderRadius: "8px", fontWeight: "700", fontSize: "12px", cursor: "pointer"
+                }}
+              >
+                Not Now
+              </button>
+            </div>
+          </div>
+        )}
         
         <main className="dashboard">
           {/* Top Hero Section */}
