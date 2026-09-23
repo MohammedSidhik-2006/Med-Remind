@@ -126,10 +126,12 @@ function Dashboard() {
         fetchReportsData();
       }, 60000);
 
-      // Setup push notifications automatically
-      setupPushNotifications().catch(err => {
-        console.error("Auto setup push notifications failed:", err);
-      });
+      // Setup push notifications automatically ONLY if permission is already granted
+      if ("Notification" in window && Notification.permission === "granted") {
+        setupPushNotifications().catch(err => {
+          console.error("Auto setup push notifications failed:", err);
+        });
+      }
 
       // Force background Service Worker eviction if a cached, broken version exists.
       if ("serviceWorker" in navigator) {

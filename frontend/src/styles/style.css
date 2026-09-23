@@ -453,7 +453,7 @@ body {
   display: flex;
   flex-direction: column;
   transition: margin-left 0.3s ease;
-  width: 100%;
+  width: calc(100% - 280px);
   box-sizing: border-box;
 }
 

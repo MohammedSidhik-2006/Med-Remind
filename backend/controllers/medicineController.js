@@ -191,18 +191,20 @@ exports.markTaken = async (req, res) => {
     // Stock will never become negative due to min: 0 constraint in schema.
     const updated = await Medicine.findByIdAndUpdate(
       req.params.id,
-      { 
-        $set: { 
-          taken: isFullyTaken, 
-          takenAt: new Date(), 
-          confirmationPending: false, 
-          snoozedUntil: null, 
-          snoozeCount: 0,
-          missedCount: 0,
-          refillNotified: shouldNotifyRefill ? true : (currentStock - 1 > medicine.refillAt ? false : medicine.refillNotified)
-        },
-        $inc: { stock: -1 }
-      },
+      [
+        {
+          $set: { 
+            taken: isFullyTaken, 
+            takenAt: new Date(), 
+            confirmationPending: false, 
+            snoozedUntil: null, 
+            snoozeCount: 0,
+            missedCount: 0,
+            refillNotified: shouldNotifyRefill ? true : (currentStock - 1 > medicine.refillAt ? false : medicine.refillNotified),
+            stock: { $max: [0, { $subtract: [{ $ifNull: ["$stock", 0] }, 1] }] }
+          }
+        }
+      ],
       { returnDocument: "after" }
     );
 

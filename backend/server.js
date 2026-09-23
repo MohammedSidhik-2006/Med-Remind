@@ -6,12 +6,19 @@ const connectDB = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
 const medicineRoutes = require("./routes/medicineRoutes");
 const adminRoutes = require("./routes/adminRoutes");
+const caregiverRoutes = require("./routes/caregiverRoutes");
 const startReminder = require("./services/reminderService");
 const { sendPushToUser } = require("./services/pushService");
 const authMiddleware = require("./middleware/authMiddleware");
 const User = require("./models/User");
 
 const app = express();
+
+// ── Trust Proxy (Required for Render / all cloud reverse proxies) ────────────
+// Without this, req.ip resolves to the proxy's IP, not the real client's IP.
+// This breaks express-rate-limit: all users share the same IP and 10 global
+// login attempts lock everyone out for 15 minutes.
+app.set("trust proxy", 1);
 
 // ── Security Headers ──────────────────────────────────────────
 // Hardens API against standard web vulnerabilities (Helmet alternative)
@@ -25,7 +32,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// ── CORS ──────────────────────────────────────────────────────
 const corsOrigin = process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : ['http://localhost:3000'];
 app.use(cors({
   origin: function(origin, callback) {
@@ -40,21 +46,6 @@ app.use(cors({
 }));
 
 app.use(express.json({ limit: "10kb" }));
-
-
-
-
-// ── Startup ───────────────────────────────────────────────────
-connectDB().then(() => {
-  startReminder();
-  
-  // Start server only after DB connection succeeds
-  const PORT = process.env.PORT || 5000;
-  app.listen(PORT, "0.0.0.0", () => console.log(`Server running on port ${PORT} [${process.env.NODE_ENV || "development"}]`));
-}).catch((err) => {
-  console.error("❌ Failed to connect to MongoDB. Server will not start.");
-  process.exit(1);
-});
 
 // ── Cron monitoring ───────────────────────────────────────────
 let lastCronRun = null;
@@ -116,8 +107,6 @@ app.post("/api/send-notification", authMiddleware, async (req, res) => {
   }
 });
 
-const caregiverRoutes = require("./routes/caregiverRoutes");
-
 app.use("/api/auth", authRoutes);
 app.use("/api/medicine", medicineRoutes);
 app.use("/api/admin", adminRoutes);
@@ -130,6 +119,19 @@ app.use((req, res) => res.status(404).json({ message: "Route not found" }));
 app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
   console.error("Unhandled error:", err.message);
   res.status(500).json({ message: "Internal server error" });
+});
+
+// ── Startup ───────────────────────────────────────────────────
+// All routes and middleware are fully registered above.
+// DB connection and app.listen() are the very last things that happen.
+// This guarantees no request can ever arrive before routes are registered.
+connectDB().then(() => {
+  startReminder();
+  const PORT = process.env.PORT || 5000;
+  app.listen(PORT, "0.0.0.0", () => console.log(`Server running on port ${PORT} [${process.env.NODE_ENV || "development"}]`));
+}).catch(() => {
+  console.error("❌ Failed to connect to MongoDB. Server will not start.");
+  process.exit(1);
 });
 
 process.on("unhandledRejection", (reason) => { console.error("Unhandled Rejection:", reason); });

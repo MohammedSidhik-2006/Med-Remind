@@ -3,10 +3,23 @@ import axios from "axios";
 const getBaseURL = () => {
   if (process.env.REACT_APP_API_URL) {
     const url = process.env.REACT_APP_API_URL;
-    return url.endsWith('/api') ? url : `${url.replace(/\/$/, '')}/api`;
+    // Normalize: strip trailing slash, ensure it ends with /api
+    const base = url.replace(/\/+$/, "");
+    return base.endsWith("/api") ? base : `${base}/api`;
   }
-  const hostname = window.location.hostname || "localhost";
-  return `http://${hostname}:5000/api`;
+  const hostname = window.location.hostname;
+  // On localhost: connect to local backend normally
+  if (hostname === "localhost" || hostname === "127.0.0.1") {
+    return "http://localhost:5000/api";
+  }
+  // On production: REACT_APP_API_URL MUST be set in Vercel environment variables.
+  // Without it every API call will fail. Set it to your Render backend URL.
+  console.error(
+    "[MedRemind] REACT_APP_API_URL is not set! " +
+    "Go to Vercel dashboard → Settings → Environment Variables and add: " +
+    "REACT_APP_API_URL = https://medi-time-2peh.onrender.com/api"
+  );
+  return "";
 };
 
 const API = axios.create({
