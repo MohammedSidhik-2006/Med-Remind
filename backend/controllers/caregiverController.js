@@ -171,17 +171,18 @@ exports.getPatientDashboard = async (req, res) => {
       return { ...med, takenTodayCount: takenCount, maxMissedThreshold };
     }));
 
-    // DoseLog history (newest 50 logs)
-    const logs = await DoseLog.find({ userId: patientId })
+    // DoseLog history — load once, derive display slice and metrics from same array
+    const allLogs = await DoseLog.find({ userId: patientId })
       .sort({ date: -1, createdAt: -1 })
-      .limit(50)
       .lean();
 
+    // Display subset (newest 50) — no extra query
+    const logs = allLogs.slice(0, 50);
+
     // Compliance metrics
-    const allLogs = await DoseLog.find({ userId: patientId }).sort({ date: -1 }).lean();
-    const totalTaken = allLogs.filter(l => l.status === "taken").length;
+    const totalTaken  = allLogs.filter(l => l.status === "taken").length;
     const totalMissed = allLogs.filter(l => l.status === "missed").length;
-    const totalDoses = totalTaken + totalMissed;
+    const totalDoses  = totalTaken + totalMissed;
     const overallAdherence = totalDoses > 0 ? Math.round((totalTaken / totalDoses) * 100) : 0;
 
     // Streak calculation
@@ -193,8 +194,6 @@ exports.getPatientDashboard = async (req, res) => {
 
     let streak = 0;
     let checkDate = new Date();
-    // If today has no taken doses yet, don't penalise the streak —
-    // start from yesterday so a morning check doesn't wipe out a valid streak.
     const todayStrC  = getLocalDate(checkDate);
     const todayDataC = byDate[todayStrC];
     if (!todayDataC || todayDataC.taken === 0) {
@@ -208,9 +207,8 @@ exports.getPatientDashboard = async (req, res) => {
       checkDate.setDate(checkDate.getDate() - 1);
     }
 
-    // Last active time (time of most recent DoseLog action)
-    const lastLog = await DoseLog.findOne({ userId: patientId }).sort({ createdAt: -1 }).lean();
-    const lastActiveTime = lastLog ? lastLog.createdAt : null;
+    // Last active time — first entry in allLogs (already sorted newest-first)
+    const lastActiveTime = allLogs.length > 0 ? allLogs[0].createdAt : null;
 
     res.json({
       patient: {

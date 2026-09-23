@@ -117,7 +117,9 @@ exports.markTaken = async (req, res) => {
 
     const medicine = await Medicine.findOne({ _id: req.params.id, userId: req.user.id });
     if (!medicine) return res.status(404).json({ message: "Medicine not found" });
-    if (medicine.taken) return res.json(medicine); // Idempotent block bypass
+    // NOTE: Do NOT add an early-return on medicine.taken here.
+    // medicine.taken=true only means ALL slots for today are done.
+    // For multi-dose medicines, this guard would block the 2nd/3rd slot from being recorded.
 
     const today         = getLocalDate();
     const allTimes      = medicine.times?.length > 0 ? medicine.times : [medicine.time];
@@ -214,9 +216,10 @@ exports.markTaken = async (req, res) => {
       for (const rel of relations) {
         sendPushToUser(rel.caregiverId, {
           title: `💊 Medicine Taken: ${req.user.name || "Patient"}`,
-          body: `${req.user.name || "Patient"} took their medicine: ${medicine.name} (${medicine.dosage}) at ${new Date().toLocaleTimeString("en-US", { timeZone: process.env.TZ || "Asia/Kolkata", hour12: true, hour: "2-digit", minute: "2-digit" })}.`,
-          icon: "/logo192.png",
-          tag: `taken-${medicine._id}-${Date.now()}`
+          body: `${req.user.name || "Patient"} took ${medicine.name} (${medicine.dosage}) at ${new Date().toLocaleTimeString("en-US", { timeZone: process.env.TZ || "Asia/Kolkata", hour12: true, hour: "2-digit", minute: "2-digit" })}.`,
+          icon: "/medremind-icon-192.svg",
+          // Stable tag per patient+medicine+slot: replaces, doesn't stack on caregiver's phone
+          tag: `taken-${medicine.userId}-${medicine._id}-${scheduledTime}`
         }).catch(e => console.error("Error sending push to caregiver:", e.message));
       }
     } catch (caregiverErr) {

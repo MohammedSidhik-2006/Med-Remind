@@ -97,8 +97,10 @@ function RefillTracker() {
               <div className="medicine-list">
                 {medicines.map((med) => {
                   const status = getStockStatus(med);
-                  // Calculate stock percentage for progress bar (cap at 100%)
-                  const progressPercent = Math.min(100, Math.round((med.stock / 30) * 100));
+                  // Calculate stock percentage: use max(current stock, 30) as cap so the
+                  // bar reflects full at 30+ doses but also works for larger initial stocks.
+                  const stockCap = Math.max(30, med.stock);
+                  const progressPercent = Math.min(100, Math.round((med.stock / stockCap) * 100));
                   return (
                     <div key={med._id} className="medicine-card" style={{ flexDirection: "column", alignItems: "stretch", gap: "16px", padding: "24px" }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px" }}>
@@ -139,7 +141,7 @@ function RefillTracker() {
 
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "13px", color: "var(--text-light)", fontWeight: "600" }}>
                         <span>Alert when stock reaches {med.refillAt} doses</span>
-                        <span>Estimated capacity: 30 doses</span>
+                        <span>Initial capacity: {stockCap} doses</span>
                       </div>
 
                       {editingId === med._id ? (
