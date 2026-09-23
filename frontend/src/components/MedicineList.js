@@ -469,7 +469,7 @@ function MedicineList({ medicines, setMedicines, loading, refreshMedicines, navi
           message={`Please confirm you have actually taken ${confirmTarget.med.name} (${confirmTarget.med.dosage}) scheduled at ${formatTo12Hour(confirmTarget.slotTime)}.`}
           confirmText="Yes, I Took It"
           confirmClass="success"
-          disabled={processing}
+          disabled={isProcessing(confirmTarget.med._id, confirmTarget.slotTime)}
           onConfirm={handleTakenConfirm}
           onCancel={() => setConfirmTarget(null)}
         >
@@ -478,7 +478,7 @@ function MedicineList({ medicines, setMedicines, loading, refreshMedicines, navi
             marginBottom: "20px", fontSize: "13px", color: "var(--success-hover)",
             fontWeight: "600"
           }}>
-            {processing ? "Saving..." : "Confirming this will deduct 1 dose from your stock and log the time."}
+            {isProcessing(confirmTarget.med._id, confirmTarget.slotTime) ? "Saving..." : "Confirming this will deduct 1 dose from your stock and log the time."}
           </div>
         </Modal>
       )}
