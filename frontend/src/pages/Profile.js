@@ -215,10 +215,14 @@ function Profile() {
           <h2 className="page-title">Profile & Settings</h2>
         </header>
 
-        <main className="dashboard" style={{ maxWidth: "800px" }}>
+        <main className="dashboard" style={{ maxWidth: "800px", margin: "0 auto", width: "100%", padding: "24px 20px" }}>
           
           {/* Avatar + Info Card */}
-          <div className="profile-header-card" style={{ background: "white", border: "1px solid var(--border-light)", boxShadow: "var(--shadow-sm)" }}>
+          <div className="profile-header-card" style={{ 
+            display: "flex", alignItems: "center", gap: "24px", flexWrap: "wrap",
+            background: "white", border: "1px solid var(--border-light)", borderRadius: "16px",
+            padding: "32px", marginBottom: "32px", boxShadow: "var(--shadow-sm)" 
+          }}>
             <div style={{
               width: "72px", height: "72px", borderRadius: "50%",
               background: "var(--primary-light)", border: "2px solid var(--primary)",
@@ -238,7 +242,10 @@ function Profile() {
 
           {/* Stats Row */}
           {stats && (
-            <div className="profile-stats-grid" style={{ marginBottom: "24px" }}>
+            <div className="profile-stats-grid" style={{ 
+              display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", 
+              gap: "16px", marginBottom: "32px" 
+            }}>
               {[
                 { label: "Total Medications", value: stats.totalMedicines, color: "var(--primary)", icon: "💊" },
                 { label: "Active Today", value: stats.activeMedicines, color: "var(--info)", icon: "✓" },
