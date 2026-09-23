@@ -382,6 +382,13 @@ exports.getReports = async (req, res) => {
 
     let streak    = 0;
     let checkDate = new Date();
+    // If today has no taken doses yet (user hasn't had a chance to take them),
+    // don't penalise the streak — start checking from yesterday instead.
+    const todayStr  = getLocalDate(checkDate);
+    const todayData = byDate[todayStr];
+    if (!todayData || todayData.taken === 0) {
+      checkDate.setDate(checkDate.getDate() - 1);
+    }
     for (let i = 0; i < 365; i++) {
       const ds  = getLocalDate(checkDate);
       const day = byDate[ds];

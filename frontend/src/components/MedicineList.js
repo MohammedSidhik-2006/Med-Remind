@@ -68,7 +68,10 @@ function MedicineList({ medicines, setMedicines, loading, refreshMedicines, navi
   const [confirmTarget, setConfirmTarget] = useState(null);
   const [snoozeTarget, setSnoozeTarget] = useState(null);
   const [inAppAlerts, setInAppAlerts] = useState([]);
-  const [processing, setProcessing] = useState(false);
+  // Per-item processing key: "medId-slotTime" when busy, null when idle.
+  // Prevents a single card's network call from blocking ALL other cards.
+  const [processingKey, setProcessingKey] = useState(null);
+  const isProcessing = (medId, slotTime) => processingKey === `${medId}-${slotTime}`;
   const [infoModal, setInfoModal] = useState(null);
 
   const isMissedLocked = (med) => {
@@ -108,9 +111,19 @@ function MedicineList({ medicines, setMedicines, loading, refreshMedicines, navi
         return [...prev, med];
       });
 
+      // Offline-safe beep using Web Audio API — no network request needed
       try {
-        const audio = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
-        audio.play().catch(() => {});
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc  = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = "sine";
+        osc.frequency.value = 880;
+        gain.gain.setValueAtTime(0.3, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.6);
       } catch (err) {}
     });
   }, []);
@@ -162,13 +175,15 @@ function MedicineList({ medicines, setMedicines, loading, refreshMedicines, navi
 
   // State lifting & optimistic updates for taken confirmation
   const handleTakenConfirm = async () => {
-    if (processing || !confirmTarget) return;
-    setProcessing(true);
-    const backup = [...medicines];
+    if (!confirmTarget) return;
     const { med, slotTime } = confirmTarget;
     const targetId = med._id;
+    const key = `${targetId}-${slotTime}`;
+    if (processingKey === key) return; // Already in-flight for this slot
+    setProcessingKey(key);
+    const backup = [...medicines];
 
-    // Optimistic Update
+    // Optimistic Update — only affects this specific medicine card
     setMedicines(prev => prev.map(m => {
       if (m._id === targetId) {
         const newStock = Math.max(0, (m.stock || 0) - 1);
@@ -206,7 +221,7 @@ function MedicineList({ medicines, setMedicines, loading, refreshMedicines, navi
         icon: "Warning" 
       });
     } finally {
-      setProcessing(false);
+      setProcessingKey(null);
     }
   };
 
@@ -379,21 +394,21 @@ function MedicineList({ medicines, setMedicines, loading, refreshMedicines, navi
                     {slot.slotStatus !== "taken" && !slotLocked && (
                       <button 
                         className="mark-taken-btn" 
-                        disabled={processing}
+                        disabled={isProcessing(slot._id, slot.slotTime)}
                         onClick={() => handleMarkTakenClick(slot, slot.slotTime)}
                       >
-                        {processing && confirmTarget?.med?._id === slot._id && confirmTarget?.slotTime === slot.slotTime ? "Confirming..." : "Mark Taken"}
+                        {isProcessing(slot._id, slot.slotTime) ? "Confirming..." : "Mark Taken"}
                       </button>
                     )}
                     {slot.slotStatus !== "taken" && !slotLocked && !isSlotSnoozed(slot, slot.slotTime) && (
                       <button 
-                        disabled={processing}
+                        disabled={isProcessing(slot._id, slot.slotTime)}
                         onClick={() => setSnoozeTarget({ med: slot, slotTime: slot.slotTime })} 
                         style={{
                           background: "#fff3e0", color: "#f57c00", border: "1px solid #ffcc80",
                           padding: "8px 12px", borderRadius: "8px", cursor: "pointer",
                           fontSize: "13px", fontWeight: "600",
-                          opacity: processing ? 0.6 : 1
+                          opacity: isProcessing(slot._id, slot.slotTime) ? 0.6 : 1
                         }}
                       >
                         Snooze
@@ -407,7 +422,7 @@ function MedicineList({ medicines, setMedicines, loading, refreshMedicines, navi
                         Snoozed until {new Date(slot.snoozedUntil).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                       </span>
                     )}
-                    <button className="delete-btn" disabled={processing} onClick={() => setDeleteTarget(slot)}>
+                    <button className="delete-btn" onClick={() => setDeleteTarget(slot)}>
                       Delete
                     </button>
                   </div>
@@ -440,7 +455,7 @@ function MedicineList({ medicines, setMedicines, loading, refreshMedicines, navi
           message={`Are you sure you want to remove "${deleteTarget.name}" from your schedule? This action cannot be undone.`}
           confirmText="Yes, Delete"
           confirmClass="danger"
-          disabled={processing}
+          disabled={false}
           onConfirm={handleDeleteConfirm}
           onCancel={() => setDeleteTarget(null)}
         />

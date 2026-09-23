@@ -193,6 +193,13 @@ exports.getPatientDashboard = async (req, res) => {
 
     let streak = 0;
     let checkDate = new Date();
+    // If today has no taken doses yet, don't penalise the streak —
+    // start from yesterday so a morning check doesn't wipe out a valid streak.
+    const todayStrC  = getLocalDate(checkDate);
+    const todayDataC = byDate[todayStrC];
+    if (!todayDataC || todayDataC.taken === 0) {
+      checkDate.setDate(checkDate.getDate() - 1);
+    }
     for (let i = 0; i < 365; i++) {
       const ds = getLocalDate(checkDate);
       const day = byDate[ds];
