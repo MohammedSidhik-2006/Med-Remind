@@ -212,7 +212,7 @@ function Dashboard() {
       
       {/* Main Layout Area Shifted on Desktop */}
       <div className="main-layout-content">
-        <Navbar onToggleSidebar={() => setIsSidebarOpen(true)} />
+        <Navbar onToggleSidebar={() => setIsSidebarOpen(true)} globalMedicines={medicines} />
 
         {/* Push Notification Permission Banner */}
         {showPushBanner && (

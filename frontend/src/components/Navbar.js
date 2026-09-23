@@ -20,7 +20,7 @@ const getTokenData = () => {
   }
 };
 
-function Navbar({ onToggleSidebar }) {
+function Navbar({ onToggleSidebar, globalMedicines }) {
   const navigate = useNavigate();
   const user = getTokenData();
   const userName = user?.name || "User";
@@ -53,12 +53,16 @@ function Navbar({ onToggleSidebar }) {
   }, []);
 
   useEffect(() => {
-    fetchPendingMedicines();
-    const interval = setInterval(() => {
+    if (globalMedicines) {
+      // Sync instantly from parent (like Dashboard)
+      setPendingMeds(globalMedicines.filter(m => m.confirmationPending && !m.taken));
+    } else {
+      // Fallback for pages without globalMedicines
       fetchPendingMedicines();
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [fetchPendingMedicines]);
+      const interval = setInterval(() => fetchPendingMedicines(), 30000);
+      return () => clearInterval(interval);
+    }
+  }, [globalMedicines, fetchPendingMedicines]);
 
   const handleLogout = () => {
     localStorage.removeItem("token");
