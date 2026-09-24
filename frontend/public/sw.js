@@ -91,6 +91,7 @@ self.addEventListener("push", (event) => {
     badge:              "/medremind-icon-192.svg",
     tag:                data.tag   || "medremind",
     requireInteraction: true,
+    vibrate:            [200, 100, 200, 100, 200, 100, 200], // CRITICAL: Wakes Android from sleep
     // Store the dashboard URL in notification data so notificationclick can open it
     data: { url: `${self.location.origin}/dashboard` }
   };

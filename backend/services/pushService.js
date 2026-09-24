@@ -28,7 +28,10 @@ const sendPushNotification = async (subscription, payload, userId) => {
   if (!subscription || !subscription.endpoint) return false;
 
   try {
-    await webpush.sendNotification(subscription, JSON.stringify(payload));
+    // CRITICAL FIX: Pass urgency: 'high' and TTL to force Android FCM / iOS APNs 
+    // to wake the device from deep doze when the screen is off or app is closed.
+    const options = { urgency: "high", TTL: 86400 };
+    await webpush.sendNotification(subscription, JSON.stringify(payload), options);
     return true;
   } catch (err) {
     // 410 Gone or 404 Not Found = subscription expired, remove it
