@@ -1,379 +1,688 @@
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import Navbar from "../components/Navbar";
-import Sidebar from "../components/Sidebar";
-import MedicineList from "../components/MedicineList";
-import DailyProgress from "../components/DailyProgress";
-import QuickActions from "../components/QuickActions";
-import Footer from "../components/Footer";
+import AppShell from "../components/AppShell";
+import { Card, Button, Badge, ProgressBar } from "../components/UI";
+import { SkeletonDashboard } from "../components/Skeleton";
 import API from "../services/api";
 import { setupPushNotifications } from "../services/notifications";
+import { useToast } from "../components/Toast";
+import MedicineList from "../components/MedicineList";
 
-const formatTo12Hour = (timeStr) => {
-  if (!timeStr) return "";
-  const [hourStr, minStr] = timeStr.split(":");
-  const hour = parseInt(hourStr, 10);
-  if (isNaN(hour)) return timeStr;
-  const min = minStr;
-  const ampm = hour >= 12 ? "PM" : "AM";
-  const formattedHour = hour % 12 === 0 ? 12 : hour % 12;
-  return `${String(formattedHour).padStart(2, "0")}:${min} ${ampm}`;
-};
-
+/**
+ * Modern Dashboard - The heart of MedRemind
+ * Redesigned with human-centered healthcare UX principles
+ */
 function Dashboard() {
   const navigate = useNavigate();
+  const { addToast } = useToast();
+  
+  // Core state
   const [medicines, setMedicines] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [nextDose, setNextDose] = useState(null);
-  
-  // Sidebar State
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-
-  // Push permission prompt banner
-  const [showPushBanner, setShowPushBanner] = useState(false);
-  const [pushEnabling, setPushEnabling] = useState(false);
-
-  // Statistics State
-  const [streak, setStreak] = useState(0);
-  const [longestStreak, setLongestStreak] = useState(0);
-  const [adherenceRate, setAdherenceRate] = useState(0);
   const [stats, setStats] = useState({ taken: 0, pending: 0, missed: 0, total: 0 });
+  const [adherenceRate, setAdherenceRate] = useState(0);
+  const [streak, setStreak] = useState(0);
+  
+  // Push notification state  
+  const [showPushPrompt, setShowPushPrompt] = useState(false);
+  const [settingUpPush, setSettingUpPush] = useState(false);
 
-  // Fetch medicines and reports data
-  const fetchMedicines = useCallback(async (showLoading = false) => {
-    if (showLoading) setLoading(true);
+  // Auth guard
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      navigate("/");
+      return;
+    }
+  }, [navigate]);
+
+  // Get user info from token
+  const getUserInfo = () => {
     try {
-      const res = await API.get("/medicine");
-      setMedicines(res.data);
-      
-      // Calculate today's dose stats
-      let todayScheduled = 0;
-      let todayCompleted = 0;
-      let todayMissed = 0;
-      let todayPending = 0;
+      const token = localStorage.getItem("token");
+      if (!token) return null;
+      const payload = JSON.parse(atob(token.split(".")[1]));
+      return payload;
+    } catch {
+      return null;
+    }
+  };
 
-      const now = new Date();
-      const pad = n => String(n).padStart(2, "0");
-      const todayStr = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
+  const user = getUserInfo();
+  const userName = user?.name?.split(" ")[0] || "there";
 
-      const active = res.data.filter(m => {
-        if (m.startDate && todayStr < m.startDate) return false;
-        if (m.endDate && todayStr > m.endDate) return false;
+  // Fetch dashboard data
+  const fetchDashboardData = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoading(true);
+    
+    try {
+      const [medicinesRes, reportsRes] = await Promise.all([
+        API.get("/medicine"),
+        API.get("/medicine/reports?period=month")
+      ]);
+
+      const medicinesData = medicinesRes.data;
+      const reportsData = reportsRes.data;
+
+      setMedicines(medicinesData);
+      setStreak(reportsData.streak || 0);
+      setAdherenceRate(reportsData.overallAdherence || 0);
+
+      // Calculate today's stats
+      const today = new Date().toISOString().split('T')[0];
+      const activeMedicines = medicinesData.filter(med => {
+        if (med.startDate && today < med.startDate) return false;
+        if (med.endDate && today > med.endDate) return false;
         return true;
       });
 
-      active.forEach(m => {
-        const times = m.times?.length > 0 ? m.times : [m.time];
-        times.forEach(t => {
-          if (!t) return;
-          todayScheduled++;
-          const logged = m.todayLogs?.find(l => l.scheduledTime === t);
-          if (logged) {
-            if (logged.status === "taken") todayCompleted++;
-            else if (logged.status === "missed") todayMissed++;
-            else todayPending++;
+      let totalScheduled = 0;
+      let totalTaken = 0;
+      let totalMissed = 0;
+      let totalPending = 0;
+
+      activeMedicines.forEach(med => {
+        const times = med.times?.length > 0 ? med.times : [med.time];
+        times.forEach(() => {
+          totalScheduled++;
+          const todayLog = med.todayLogs?.find(log => 
+            log.date === today || log.scheduledTime
+          );
+          
+          if (todayLog) {
+            if (todayLog.status === "taken") totalTaken++;
+            else if (todayLog.status === "missed") totalMissed++;
+            else totalPending++;
           } else {
-            todayPending++;
+            totalPending++;
           }
         });
       });
 
       setStats({
-        taken: todayCompleted,
-        missed: todayMissed,
-        pending: todayPending,
-        total: todayScheduled
+        taken: totalTaken,
+        missed: totalMissed,
+        pending: totalPending,
+        total: totalScheduled
       });
 
-    } catch (err) {
-      console.error("Error fetching medicines:", err);
+    } catch (error) {
+      console.error("Error fetching dashboard data:", error);
+      addToast("Failed to load dashboard data", "error");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [addToast]);
 
-  const fetchReportsData = useCallback(async () => {
-    try {
-      const res = await API.get("/medicine/reports?period=month");
-      setStreak(res.data.streak || 0);
-      setAdherenceRate(res.data.overallAdherence || 0);
-
-      // Compute longest streak in 30 days
-      const dailyData = res.data.dailyData || [];
-      let currentRun = 0;
-      let maxRun = 0;
-      dailyData.forEach(d => {
-        if (d.total > 0 && d.missed === 0 && d.adherence === 100) {
-          currentRun++;
-          if (currentRun > maxRun) maxRun = currentRun;
-        } else if (d.total > 0) {
-          currentRun = 0;
-        }
-      });
-      setLongestStreak(Math.max(maxRun, res.data.streak || 0));
-    } catch (err) {
-      console.error("Error fetching reports streak data:", err);
-    }
-  }, []);
-
-  // Auth guard and passive Service Worker auto-updater
   useEffect(() => {
-    if (!localStorage.getItem("token")) {
-      navigate("/");
-    } else {
-      fetchMedicines(true);
-      fetchReportsData();
+    fetchDashboardData();
+    
+    // Set up periodic refresh
+    const interval = setInterval(() => fetchDashboardData(false), 30000);
+    return () => clearInterval(interval);
+  }, [fetchDashboardData]);
 
-      // Refresh every 60 seconds
-      const interval = setInterval(() => {
-        fetchMedicines();
-        fetchReportsData();
-      }, 60000);
-
-      // Setup push notifications automatically ONLY if permission is already granted
-      if ("Notification" in window && Notification.permission === "granted") {
-        setupPushNotifications().catch(err => {
-          console.error("Auto setup push notifications failed:", err);
-        });
-      } else if (
-        // Show the banner if permission not yet decided AND user hasn't dismissed it before
-        "Notification" in window &&
-        Notification.permission === "default" &&
-        !localStorage.getItem("pushPromptDismissed")
-      ) {
-        // Delay slightly so the page settles before showing the banner
-        setTimeout(() => setShowPushBanner(true), 2000);
-      }
-
-      // Force background Service Worker eviction if a cached, broken version exists.
-      if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("/sw.js").then(reg => {
-          reg.update().catch(() => {});
-        }).catch(() => {});
-      }
-
-      return () => clearInterval(interval);
+  // Push notification setup
+  useEffect(() => {
+    // Show push prompt if permission is default and not dismissed
+    if (
+      "Notification" in window &&
+      Notification.permission === "default" &&
+      !localStorage.getItem("pushPromptDismissed")
+    ) {
+      setTimeout(() => setShowPushPrompt(true), 3000);
     }
-  }, [navigate, fetchMedicines, fetchReportsData]);
+    
+    // Auto-setup if permission already granted
+    if ("Notification" in window && Notification.permission === "granted") {
+      setupPushNotifications().catch(console.error);
+    }
+  }, []);
 
-  const handleEnablePush = async () => {
-    setPushEnabling(true);
+  const handlePushSetup = async () => {
+    setSettingUpPush(true);
     try {
-      const ok = await setupPushNotifications();
-      if (ok) {
-        setShowPushBanner(false);
+      const success = await setupPushNotifications();
+      if (success) {
+        setShowPushPrompt(false);
+        addToast("Push notifications enabled successfully!", "success");
       } else {
-        // Permission denied or failed — don't nag again
-        setShowPushBanner(false);
+        setShowPushPrompt(false);
         localStorage.setItem("pushPromptDismissed", "1");
+        addToast("Push notifications setup was cancelled", "info");
       }
-    } catch (err) {
-      console.error("Push enable failed:", err);
-      setShowPushBanner(false);
+    } catch (error) {
+      console.error("Push setup failed:", error);
+      addToast("Failed to setup push notifications", "error");
     } finally {
-      setPushEnabling(false);
+      setSettingUpPush(false);
     }
   };
 
-  const handleDismissPushBanner = () => {
-    setShowPushBanner(false);
+  const dismissPushPrompt = () => {
+    setShowPushPrompt(false);
     localStorage.setItem("pushPromptDismissed", "1");
   };
 
-  // Greetings and motivational quotes
-  const getUserName = () => {
-    const token = localStorage.getItem("token");
-    if (!token) return "User";
-    try {
-      const payload = JSON.parse(atob(token.split(".")[1]));
-      return payload.name || "User";
-    } catch {
-      return "User";
-    }
+  // Get next upcoming medication
+  const getNextMedication = () => {
+    const now = new Date();
+    const currentTime = now.toTimeString().slice(0, 5); // HH:MM format
+    
+    const upcoming = medicines
+      .filter(med => med.confirmationPending || !med.taken)
+      .map(med => {
+        const times = med.times?.length > 0 ? med.times : [med.time];
+        return times.map(time => ({ ...med, scheduledTime: time }));
+      })
+      .flat()
+      .filter(med => med.scheduledTime >= currentTime)
+      .sort((a, b) => a.scheduledTime.localeCompare(b.scheduledTime));
+
+    return upcoming[0] || null;
   };
 
+  const nextMed = getNextMedication();
+
+  // Calculate daily progress percentage
+  const dailyProgress = stats.total > 0 ? (stats.taken / stats.total) * 100 : 0;
+
+  // Get greeting based on time
   const getGreeting = () => {
-    const hrs = new Date().getHours();
-    if (hrs < 12) return "Good Morning";
-    if (hrs < 17) return "Good Afternoon";
-    return "Good Evening";
+    const hour = new Date().getHours();
+    if (hour < 12) return "Good morning";
+    if (hour < 17) return "Good afternoon";
+    return "Good evening";
   };
 
-  const getMotivationalMessage = () => {
-    if (adherenceRate >= 90) return "Outstanding! You are maintaining an excellent medication schedule.";
-    if (adherenceRate >= 70) return "You're doing great. Keep focus to complete all doses today.";
-    return "Consistency is key to recovery. Try setting alarm reminders for all slots.";
-  };
+  if (loading) {
+    return (
+      <AppShell title="Dashboard">
+        <SkeletonDashboard />
+      </AppShell>
+    );
+  }
 
   return (
-    <div className="dashboard-container">
-      {/* Reusable Sidebar Navigation */}
-      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
-      
-      {/* Main Layout Area Shifted on Desktop */}
-      <div className="main-layout-content">
-        <Navbar onToggleSidebar={() => setIsSidebarOpen(true)} globalMedicines={medicines} />
-
-        {/* Push Notification Permission Banner */}
-        {showPushBanner && (
-          <div style={{
-            background: "linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)",
-            color: "white",
-            padding: "14px 20px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: "12px",
-            flexWrap: "wrap",
-            zIndex: 100,
-            boxShadow: "0 2px 12px rgba(79,70,229,0.4)"
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1 }}>
-              <span style={{ fontSize: "22px" }}>🔔</span>
-              <div>
-                <div style={{ fontWeight: "800", fontSize: "14px" }}>Enable Medication Reminders</div>
-                <div style={{ fontSize: "12px", opacity: 0.85, marginTop: "2px" }}>
-                  Get notified even when the app is closed — like Flipkart order alerts.
+    <AppShell title="Dashboard" subtitle="Your medication overview">
+      <div className="dashboard-container">
+        {/* Push notification prompt */}
+        {showPushPrompt && (
+          <Card className="push-prompt-banner mb-6">
+            <div className="flex items-center gap-4">
+              <div className="flex-shrink-0">
+                <div className="notification-icon">
+                  <svg className="icon icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                  </svg>
                 </div>
               </div>
-            </div>
-            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-              <button
-                onClick={handleEnablePush}
-                disabled={pushEnabling}
-                style={{
-                  padding: "9px 20px", background: "white", color: "#4f46e5",
-                  border: "none", borderRadius: "8px", fontWeight: "800",
-                  fontSize: "13px", cursor: "pointer", opacity: pushEnabling ? 0.7 : 1
-                }}
-              >
-                {pushEnabling ? "Enabling..." : "Enable Now"}
-              </button>
-              <button
-                onClick={handleDismissPushBanner}
-                style={{
-                  padding: "9px 14px", background: "rgba(255,255,255,0.15)",
-                  color: "white", border: "1px solid rgba(255,255,255,0.3)",
-                  borderRadius: "8px", fontWeight: "700", fontSize: "12px", cursor: "pointer"
-                }}
-              >
-                Not Now
-              </button>
-            </div>
-          </div>
-        )}
-        
-        <main className="dashboard">
-          {/* Top Hero Section */}
-          <div className="dashboard-hero">
-            <div className="hero-welcome">
-              <h2>{getGreeting()}, <span>{getUserName()}</span></h2>
-              <p style={{ marginTop: "6px" }}>{getMotivationalMessage()}</p>
-            </div>
-            <div className="hero-date-box">
-              <div className="hero-date">
-                {new Date().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
-              </div>
-              {nextDose ? (
-                <div className="hero-time">
-                  Next: {nextDose.name} at {formatTo12Hour(nextDose.time)}
-                </div>
-              ) : (
-                <div className="hero-time" style={{ color: "#94a3b8" }}>
-                  All schedules completed
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Quick Statistics Cards Row */}
-          <div className="stats-dashboard-grid">
-            <div className="stat-dashboard-card taken">
-              <div className="stat-label">Taken Today</div>
-              <div className="stat-val">{stats.taken} <span style={{ fontSize: "14px", fontWeight: "600", color: "var(--text-light)" }}>/ {stats.total} doses</span></div>
-            </div>
-            <div className="stat-dashboard-card pending">
-              <div className="stat-label">Pending / Snoozed</div>
-              <div className="stat-val">{stats.pending} <span style={{ fontSize: "14px", fontWeight: "600", color: "var(--text-light)" }}>doses left</span></div>
-            </div>
-            <div className="stat-dashboard-card missed">
-              <div className="stat-label">Missed Doses</div>
-              <div className="stat-val">{stats.missed} <span style={{ fontSize: "14px", fontWeight: "600", color: "var(--text-light)" }}>recorded</span></div>
-            </div>
-          </div>
-
-          {/* Adherence Streak Bar */}
-          <div className="schedule-card" style={{ padding: "20px 24px", marginBottom: "30px", display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: "16px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-              <div style={{
-                width: "48px", height: "48px", borderRadius: "50%",
-                background: "var(--warning-light)", display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: "20px", color: "var(--warning)"
-              }}>🔥</div>
-              <div>
-                <div style={{ fontSize: "13px", fontWeight: "750", color: "var(--text-light)" }}>Current Streak</div>
-                <div style={{ fontSize: "20px", fontWeight: "800", color: "var(--text-main)", marginTop: "2px" }}>{streak} Day{streak !== 1 ? "s" : ""}</div>
-              </div>
-            </div>
-            
-            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-              <div style={{
-                width: "48px", height: "48px", borderRadius: "50%",
-                background: "var(--primary-light)", display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: "20px", color: "var(--primary)"
-              }}>🏆</div>
-              <div>
-                <div style={{ fontSize: "13px", fontWeight: "750", color: "var(--text-light)" }}>Longest Streak</div>
-                <div style={{ fontSize: "20px", fontWeight: "800", color: "var(--text-main)", marginTop: "2px" }}>{longestStreak} Day{longestStreak !== 1 ? "s" : ""}</div>
-              </div>
-            </div>
-
-            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-              <div style={{
-                width: "48px", height: "48px", borderRadius: "50%",
-                background: "var(--success-light)", display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: "20px", color: "var(--success)"
-              }}>📈</div>
-              <div>
-                <div style={{ fontSize: "13px", fontWeight: "750", color: "var(--text-light)" }}>Overall Adherence</div>
-                <div style={{ fontSize: "20px", fontWeight: "800", color: "var(--text-main)", marginTop: "2px" }}>{adherenceRate}%</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Split Dashboard Grid */}
-          <div className="dashboard-grid">
-            {/* Left Side: Timelines and Schedules */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "30px" }}>
-              <MedicineList 
-                medicines={medicines}
-                setMedicines={setMedicines}
-                loading={loading}
-                refreshMedicines={fetchMedicines}
-                navigate={navigate} 
-              />
-            </div>
-
-            {/* Right Side: Circular adherence progress and Quick shortcuts */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "30px" }}>
-              {/* Daily Circular Ring progress */}
-              <DailyProgress medicines={medicines} onNextDose={setNextDose} />
-
-              {/* Quick Actions Shortcuts Container */}
-              <div className="quick-actions-container">
-                <h3 style={{ fontSize: "15px", fontWeight: "800", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: "20px" }}>
-                  Quick Shortcuts
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold text-primary mb-1">
+                  Enable Medication Reminders
                 </h3>
-                <QuickActions navigate={navigate} />
+                <p className="text-sm text-secondary">
+                  Get notified when it's time to take your medication, even when the app is closed.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={dismissPushPrompt}
+                >
+                  Later
+                </Button>
+                <Button 
+                  variant="primary" 
+                  size="sm"
+                  loading={settingUpPush}
+                  onClick={handlePushSetup}
+                >
+                  Enable
+                </Button>
               </div>
             </div>
-          </div>
-        </main>
+          </Card>
+        )}
 
-        <Footer />
+        {/* Welcome section */}
+        <div className="welcome-section mb-8">
+          <h1 className="text-3xl font-bold text-primary mb-2">
+            {getGreeting()}, {userName}! 👋
+          </h1>
+          <p className="text-lg text-secondary">
+            Here's your medication plan for today
+          </p>
+        </div>
+
+        {/* Stats overview */}
+        <div className="stats-grid mb-8">
+          <Card className="stat-card">
+            <div className="stat-content">
+              <div className="stat-value text-2xl font-extrabold text-success">
+                {stats.taken}
+              </div>
+              <div className="stat-label text-sm font-medium text-muted">
+                Doses Taken
+              </div>
+            </div>
+            <div className="stat-icon bg-success-light text-success">
+              <svg className="icon icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="20,6 9,17 4,12" />
+              </svg>
+            </div>
+          </Card>
+
+          <Card className="stat-card">
+            <div className="stat-content">
+              <div className="stat-value text-2xl font-extrabold text-warning">
+                {stats.pending}
+              </div>
+              <div className="stat-label text-sm font-medium text-muted">
+                Pending
+              </div>
+            </div>
+            <div className="stat-icon bg-warning-light text-warning">
+              <svg className="icon icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12,6 12,12 16,14" />
+              </svg>
+            </div>
+          </Card>
+
+          <Card className="stat-card">
+            <div className="stat-content">
+              <div className="stat-value text-2xl font-extrabold text-danger">
+                {stats.missed}
+              </div>
+              <div className="stat-label text-sm font-medium text-muted">
+                Missed
+              </div>
+            </div>
+            <div className="stat-icon bg-danger-light text-danger">
+              <svg className="icon icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="15" y1="9" x2="9" y2="15" />
+                <line x1="9" y1="9" x2="15" y2="15" />
+              </svg>
+            </div>
+          </Card>
+
+          <Card className="stat-card">
+            <div className="stat-content">
+              <div className="stat-value text-2xl font-extrabold text-primary">
+                {streak}
+              </div>
+              <div className="stat-label text-sm font-medium text-muted">
+                Day Streak
+              </div>
+            </div>
+            <div className="stat-icon bg-primary-light text-primary">
+              <svg className="icon icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" />
+              </svg>
+            </div>
+          </Card>
+        </div>
+
+        {/* Main content grid */}
+        <div className="main-grid">
+          {/* Left column */}
+          <div className="main-content">
+            {/* Next medication alert */}
+            {nextMed && (
+              <Card className="next-dose-card mb-6">
+                <div className="next-dose-content">
+                  <div className="next-dose-info">
+                    <div className="next-dose-label text-sm font-semibold text-muted uppercase">
+                      Next Medication
+                    </div>
+                    <h3 className="next-dose-name text-xl font-bold text-primary">
+                      {nextMed.name}
+                    </h3>
+                    <p className="next-dose-details text-secondary">
+                      {nextMed.dosage} • {formatTime(nextMed.scheduledTime)}
+                    </p>
+                  </div>
+                </div>
+              </Card>
+            )}
+
+            {/* Today's progress */}
+            <Card className="progress-card mb-6">
+              <Card.Header>
+                <h3 className="text-lg font-semibold text-primary">Today's Progress</h3>
+              </Card.Header>
+              <Card.Body>
+                <ProgressBar.Adherence
+                  value={dailyProgress}
+                  label={`${stats.taken} of ${stats.total} doses completed`}
+                  showGrade={true}
+                />
+                
+                <div className="progress-breakdown mt-4">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-success">✓ Taken: {stats.taken}</span>
+                    <span className="text-warning">⏳ Pending: {stats.pending}</span>
+                    <span className="text-danger">✗ Missed: {stats.missed}</span>
+                  </div>
+                </div>
+              </Card.Body>
+            </Card>
+
+            {/* Today's medications */}
+            <Card>
+              <Card.Header>
+                <div className="flex justify-between items-center">
+                  <h3 className="text-lg font-semibold text-primary">Today's Medications</h3>
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => fetchDashboardData(false)}
+                  >
+                    <svg className="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+                      <path d="M21 3v5h-5" />
+                      <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+                      <path d="M8 16H3v5" />
+                    </svg>
+                  </Button>
+                </div>
+              </Card.Header>
+              <Card.Body>
+                <MedicineList medicines={medicines} refreshMedicines={() => fetchDashboardData(false)} />
+              </Card.Body>
+            </Card>
+          </div>
+
+          {/* Right column - Quick actions */}
+          <div className="sidebar-content">
+            <Card>
+              <Card.Header>
+                <h3 className="text-lg font-semibold text-primary">Quick Actions</h3>
+              </Card.Header>
+              <Card.Body>
+                <div className="quick-actions">
+                  <QuickActionItem 
+                    icon={
+                      <svg className="icon icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="12" y1="8" x2="12" y2="16" />
+                        <line x1="8" y1="12" x2="16" y2="12" />
+                      </svg>
+                    }
+                    title="Add Medication"
+                    description="Set up a new medication schedule"
+                    onClick={() => navigate("/add-medicine")}
+                  />
+                  
+                  <QuickActionItem 
+                    icon={
+                      <svg className="icon icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                        <line x1="16" y1="2" x2="16" y2="6" />
+                        <line x1="8" y1="2" x2="8" y2="6" />
+                        <line x1="3" y1="10" x2="21" y2="10" />
+                      </svg>
+                    }
+                    title="View Calendar"
+                    description="See your medication history"
+                    onClick={() => navigate("/calendar")}
+                  />
+
+                  <QuickActionItem 
+                    icon={
+                      <svg className="icon icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                      </svg>
+                    }
+                    title="Refill Tracker"
+                    description="Monitor medication stock"
+                    onClick={() => navigate("/refill")}
+                  />
+
+                  <QuickActionItem 
+                    icon={
+                      <svg className="icon icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <line x1="18" y1="20" x2="18" y2="10" />
+                        <line x1="12" y1="20" x2="12" y2="4" />
+                        <line x1="6" y1="20" x2="6" y2="14" />
+                      </svg>
+                    }
+                    title="View Reports"
+                    description="Adherence analytics"
+                    onClick={() => navigate("/reports")}
+                  />
+                </div>
+              </Card.Body>
+            </Card>
+
+            {/* Adherence summary */}
+            <Card className="mt-6">
+              <Card.Header>
+                <h3 className="text-lg font-semibold text-primary">Monthly Summary</h3>
+              </Card.Header>
+              <Card.Body>
+                <div className="adherence-summary">
+                  <div className="adherence-stat">
+                    <span className="text-2xl font-bold text-primary">{adherenceRate}%</span>
+                    <span className="text-sm text-muted">Overall Adherence</span>
+                  </div>
+                  <div className="adherence-stat">
+                    <span className="text-2xl font-bold text-success">{streak}</span>
+                    <span className="text-sm text-muted">Current Streak</span>
+                  </div>
+                </div>
+              </Card.Body>
+            </Card>
+          </div>
+        </div>
       </div>
-    </div>
+
+      <style jsx>{`
+        .dashboard-container {
+          max-width: 1200px;
+          margin: 0 auto;
+          padding: var(--space-8) var(--space-6);
+        }
+
+        .push-prompt-banner {
+          background: linear-gradient(135deg, var(--primary-light), var(--primary-soft));
+          border: 1px solid var(--primary-soft);
+        }
+
+        .notification-icon {
+          width: 48px;
+          height: 48px;
+          border-radius: var(--radius-full);
+          background: var(--primary);
+          color: var(--white);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .stats-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+          gap: var(--space-4);
+        }
+
+        .stat-card {
+          padding: var(--space-5);
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+        }
+
+        .stat-content {
+          flex: 1;
+        }
+
+        .stat-value {
+          line-height: 1;
+          margin-bottom: var(--space-1);
+        }
+
+        .stat-icon {
+          width: 48px;
+          height: 48px;
+          border-radius: var(--radius-md);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+
+        .main-grid {
+          display: grid;
+          grid-template-columns: 2fr 1fr;
+          gap: var(--space-8);
+        }
+
+        .next-dose-card {
+          background: linear-gradient(135deg, var(--warning-light), var(--warning-soft));
+          border: 1px solid var(--warning-soft);
+        }
+
+        .next-dose-content {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: var(--space-4);
+        }
+
+        .next-dose-actions {
+          display: flex;
+          gap: var(--space-2);
+          flex-shrink: 0;
+        }
+
+        .quick-actions {
+          display: flex;
+          flex-direction: column;
+          gap: var(--space-3);
+        }
+
+        .adherence-summary {
+          display: flex;
+          justify-content: space-around;
+          text-align: center;
+        }
+
+        .adherence-stat {
+          display: flex;
+          flex-direction: column;
+          gap: var(--space-1);
+        }
+
+        /* Mobile responsive */
+        @media (max-width: 768px) {
+          .dashboard-container {
+            padding: var(--space-6) var(--space-4);
+          }
+
+          .main-grid {
+            grid-template-columns: 1fr;
+            gap: var(--space-6);
+          }
+
+          .stats-grid {
+            grid-template-columns: repeat(2, 1fr);
+          }
+
+          .next-dose-content {
+            flex-direction: column;
+            align-items: stretch;
+          }
+
+          .next-dose-actions {
+            justify-content: stretch;
+          }
+        }
+      `}</style>
+    </AppShell>
   );
+}
+
+function QuickActionItem({ icon, title, description, onClick }) {
+  return (
+    <button 
+      className="quick-action-item"
+      onClick={onClick}
+    >
+      <div className="quick-action-icon">
+        {icon}
+      </div>
+      <div className="quick-action-content">
+        <div className="quick-action-title">{title}</div>
+        <div className="quick-action-description">{description}</div>
+      </div>
+
+      <style jsx>{`
+        .quick-action-item {
+          display: flex;
+          align-items: center;
+          gap: var(--space-3);
+          padding: var(--space-3);
+          border: none;
+          background: transparent;
+          border-radius: var(--radius-md);
+          cursor: pointer;
+          transition: all var(--duration-fast) var(--ease);
+          text-align: left;
+          width: 100%;
+        }
+
+        .quick-action-item:hover {
+          background: var(--bg-subtle);
+        }
+
+        .quick-action-icon {
+          width: 40px;
+          height: 40px;
+          border-radius: var(--radius-md);
+          background: var(--primary-light);
+          color: var(--primary);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+
+        .quick-action-content {
+          flex: 1;
+          min-width: 0;
+        }
+
+        .quick-action-title {
+          font-size: 14px;
+          font-weight: 600;
+          color: var(--text-primary);
+          margin-bottom: var(--space-1);
+        }
+
+        .quick-action-description {
+          font-size: 12px;
+          color: var(--text-muted);
+          line-height: 1.4;
+        }
+      `}</style>
+    </button>
+  );
+}
+
+// Helper function to format time
+function formatTime(timeStr) {
+  if (!timeStr) return "";
+  const [hourStr, minStr] = timeStr.split(":");
+  const hour = parseInt(hourStr, 10);
+  if (isNaN(hour)) return timeStr;
+  const ampm = hour >= 12 ? "PM" : "AM";
+  const formattedHour = hour % 12 === 0 ? 12 : hour % 12;
+  return `${formattedHour}:${minStr} ${ampm}`;
 }
 
 export default Dashboard;

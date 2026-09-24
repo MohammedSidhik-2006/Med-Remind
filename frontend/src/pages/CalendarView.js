@@ -1,9 +1,27 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import Navbar from "../components/Navbar";
-import Sidebar from "../components/Sidebar";
-import Footer from "../components/Footer";
+import AppShell from "../components/AppShell";
+import Button from "../components/UI/Button";
+import Card from "../components/UI/Card";
+import Badge from "../components/UI/Badge";
+import ProgressBar from "../components/UI/ProgressBar";
 import API from "../services/api";
+
+// Add spinning animation styles
+const spinKeyframes = `
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+`;
+
+// Inject styles
+if (typeof document !== 'undefined') {
+  const styleElement = document.createElement('style');
+  styleElement.innerHTML = spinKeyframes;
+  document.head.appendChild(styleElement);
+}
 
 // Local date string YYYY-MM-DD
 function localDateStr(d = new Date()) {
@@ -28,7 +46,6 @@ function CalendarView() {
   const [selectedDate,  setSelectedDate]  = useState(new Date()); // default to today for better UX
   const [reportData,    setReportData]    = useState([]);
   const [loading,       setLoading]       = useState(true);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Auth guard
   useEffect(() => {
@@ -88,210 +105,479 @@ function CalendarView() {
   const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
 
   return (
-    <div className="dashboard-container">
-      {/* Sidebar navigation */}
-      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+    <AppShell>
+      <div style={{
+        maxWidth: "1200px",
+        margin: "0 auto", 
+        padding: "var(--space-6)"
+      }}>
+        {/* Page Header */}
+        <div style={{ marginBottom: "var(--space-8)" }}>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => navigate("/dashboard")}
+            style={{ marginBottom: "var(--space-4)" }}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="m15 18-6-6 6-6"/>
+            </svg>
+            Back
+          </Button>
+          <div>
+            <h1 style={{ margin: "0 0 var(--space-2) 0", color: "var(--text-primary)" }}>Medication Calendar</h1>
+            <p style={{ color: "var(--text-secondary)", margin: "0" }}>Track your medication schedule and adherence history</p>
+          </div>
+        </div>
 
-      <div className="main-layout-content">
-        <Navbar onToggleSidebar={() => setIsSidebarOpen(true)} />
-
-        {/* Header */}
-        <header className="page-header">
-          <button className="back-btn" onClick={() => navigate("/dashboard")}>←</button>
-          <h2 className="page-title">Clinical Calendar</h2>
-        </header>
-
-        <main className="dashboard" style={{ maxWidth: "700px" }}>
-          <div className="form-card">
-            {/* Month navigation */}
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 400px",
+          gap: "var(--space-6)",
+          alignItems: "start"
+        }}>
+          {/* Calendar Card */}
+          <Card>
             <div style={{
-              display: "flex", alignItems: "center", justifyContent: "space-between",
-              marginBottom: "24px"
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "var(--space-6)",
+              borderBottom: "1px solid var(--border)"
             }}>
-              <button onClick={prevMonth} style={{
-                background: "var(--primary-light)", border: "none", borderRadius: "10px",
-                padding: "8px 16px", cursor: "pointer", fontWeight: "800",
-                color: "var(--primary)", fontSize: "16px", display: "flex", alignItems: "center",
-                justifyContent: "center"
-              }}>‹</button>
-              <h3 style={{ color: "var(--text-main)", fontSize: "18px", fontWeight: "800" }}>
-                {MONTHS[month]} {year}
-              </h3>
-              <button onClick={nextMonth} style={{
-                background: "var(--primary-light)", border: "none", borderRadius: "10px",
-                padding: "8px 16px", cursor: "pointer", fontWeight: "800",
-                color: "var(--primary)", fontSize: "16px", display: "flex", alignItems: "center",
-                justifyContent: "center"
-              }}>›</button>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={prevMonth}
+                style={{
+                  width: "40px",
+                  height: "40px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center"
+                }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="m15 18-6-6 6-6"/>
+                </svg>
+              </Button>
+              
+              <div style={{ textAlign: "center" }}>
+                <h2 style={{ margin: "0", color: "var(--text-primary)", fontWeight: "800" }}>{MONTHS[month]} {year}</h2>
+                <p style={{ margin: "var(--space-1) 0 0", color: "var(--text-secondary)" }}>Click any date to view details</p>
+              </div>
+              
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={nextMonth}
+                style={{
+                  width: "40px",
+                  height: "40px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center"
+                }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="m9 18 6-6-6-6"/>
+                </svg>
+              </Button>
             </div>
 
-            {/* Day names */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: "6px", marginBottom: "8px" }}>
-              {["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d => (
-                <div key={d} style={{
-                  textAlign: "center", fontSize: "12px", fontWeight: "750",
-                  color: "var(--text-light)", padding: "4px 0", textTransform: "uppercase",
-                  letterSpacing: "0.5px"
-                }}>{d}</div>
-              ))}
-            </div>
+            {/* Calendar Grid */}
+            <div style={{ padding: "var(--space-6)" }}>
+              {/* Day Headers */}
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(7, 1fr)",
+                gap: "var(--space-1)",
+                marginBottom: "var(--space-4)"
+              }}>
+                {["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(day => (
+                  <div key={day} style={{
+                    textAlign: "center",
+                    padding: "var(--space-2) 0",
+                    fontSize: "12px",
+                    fontWeight: "800",
+                    color: "var(--text-muted)",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.05em"
+                  }}>{day}</div>
+                ))}
+              </div>
 
-            {/* Calendar grid */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: "6px" }}>
-              {/* Empty cells for offset */}
-              {Array(firstDay).fill(null).map((_, i) => <div key={`e-${i}`} />)}
+              {/* Calendar Days */}
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(7, 1fr)",
+                gap: "var(--space-1)"
+              }}>
+                {/* Empty cells for offset */}
+                {Array(firstDay).fill(null).map((_, i) => (
+                  <div key={`empty-${i}`} />
+                ))}
 
-              {/* Day cells */}
-              {Array(daysInMonth).fill(null).map((_, i) => {
-                const day    = i + 1;
-                const pad    = n => String(n).padStart(2, "0");
-                const dayStr = `${year}-${pad(month + 1)}-${pad(day)}`;
-                const isToday    = dayStr === todayStr;
-                const isSelected = dayStr === selectedStr;
-                const dot        = getDayDot(dayStr);
-                const isFuture   = dayStr > todayStr;
+                {/* Day cells */}
+                {Array(daysInMonth).fill(null).map((_, i) => {
+                  const day    = i + 1;
+                  const pad    = n => String(n).padStart(2, "0");
+                  const dayStr = `${year}-${pad(month + 1)}-${pad(day)}`;
+                  const isToday    = dayStr === todayStr;
+                  const isSelected = dayStr === selectedStr;
+                  const dot        = getDayDot(dayStr);
+                  const isFuture   = dayStr > todayStr;
 
-                return (
-                  <div
-                    key={day}
-                    onClick={() => setSelectedDate(new Date(year, month, day))}
-                    style={{
-                      textAlign: "center", padding: "14px 4px", borderRadius: "12px",
-                      cursor: "pointer", position: "relative",
-                      background: isSelected ? "var(--primary)" : isToday ? "var(--primary-light)" : "transparent",
-                      color: isSelected ? "white" : isToday ? "var(--primary)" : isFuture ? "#cbd5e1" : "var(--text-main)",
-                      fontWeight: isToday || isSelected ? "800" : "550",
-                      border: isToday && !isSelected ? "2.5px solid var(--primary)" : "2.5px solid transparent",
-                      transition: "var(--transition-smooth)",
-                      fontSize: "14px"
-                    }}
-                  >
-                    {day}
-                    {dot && (
-                      <div style={{
-                        width: "6px", height: "6px", borderRadius: "50%",
-                        background: isSelected ? "white" : dot,
-                        margin: "4px auto 0"
-                      }} />
-                    )}
-                  </div>
-                );
-              })}
+                  return (
+                    <div
+                      key={day}
+                      onClick={() => setSelectedDate(new Date(year, month, day))}
+                      style={{
+                        position: "relative",
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        minHeight: "48px",
+                        padding: "var(--space-2)",
+                        borderRadius: "var(--radius-md)",
+                        cursor: "pointer",
+                        transition: "all var(--duration-normal) var(--ease)",
+                        border: "2px solid transparent",
+                        background: isSelected ? "var(--primary)" : isToday ? "var(--primary-light)" : "transparent",
+                        color: isSelected ? "white" : isToday ? "var(--primary)" : isFuture ? "var(--text-subtle)" : "var(--text-primary)",
+                        fontWeight: isToday || isSelected ? "800" : "600",
+                        ...(isToday && !isSelected ? { borderColor: "var(--primary)" } : {})
+                      }}
+                    >
+                      <span style={{ fontWeight: "600" }}>{day}</span>
+                      {dot && (
+                        <div style={{
+                          width: "6px",
+                          height: "6px",
+                          borderRadius: "50%",
+                          backgroundColor: isSelected ? "white" : dot,
+                          marginTop: "var(--space-1)"
+                        }} />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
             {/* Legend */}
             <div style={{
-              display: "flex", gap: "20px", justifyContent: "center",
-              marginTop: "20px", paddingTop: "20px", borderTop: "1px solid var(--border-light)"
+              display: "flex",
+              justifyContent: "center",
+              gap: "var(--space-6)",
+              padding: "var(--space-4) var(--space-6)",
+              borderTop: "1px solid var(--border)"
             }}>
-              {[["var(--success)","Perfect Compliance"],["var(--warning)","Partial Doses"],["var(--danger)","Missed Slots"]].map(([color, label]) => (
-                <div key={label} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", color: "var(--text-light)", fontWeight: "700" }}>
-                  <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: color }} />
-                  {label}
+              {[
+                { color: "var(--success)", label: "Perfect Compliance" },
+                { color: "var(--warning)", label: "Partial Doses" },
+                { color: "var(--danger)", label: "Missed Doses" }
+              ].map(({ color, label }) => (
+                <div key={label} style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "var(--space-2)"
+                }}>
+                  <div style={{
+                    width: "8px",
+                    height: "8px",
+                    borderRadius: "50%",
+                    backgroundColor: color
+                  }} />
+                  <span style={{
+                    fontSize: "12px",
+                    color: "var(--text-secondary)",
+                    fontWeight: "500"
+                  }}>{label}</span>
                 </div>
               ))}
             </div>
-          </div>
+          </Card>
 
-          {/* Selected-date detail card */}
+          {/* Selected Date Details */}
           {selectedDate && (
-            <div className="form-card" style={{ marginTop: "20px" }}>
-              <h4 style={{ fontWeight: "800", color: "var(--text-main)", marginBottom: "20px", fontSize: "16px", borderBottom: "1.5px solid var(--border-light)", paddingBottom: "10px" }}>
-                Schedule details: {selectedDate.toLocaleDateString("en-US", {
-                  weekday: "long", day: "numeric", month: "long", year: "numeric"
-                })}
-              </h4>
-
-              {loading ? (
-                <div style={{ color: "var(--text-light)", textAlign: "center", padding: "30px", fontWeight: "600" }}>
-                  Fetching schedule details...
-                </div>
-              ) : (selectedData && selectedData.total > 0) || scheduledForSelected.length > 0 ? (
-                <>
-                  {selectedData && selectedData.total > 0 && (
-                    <>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "12px", marginBottom: "16px" }}>
-                        {[
-                          { label: "Doses Taken",     value: selectedData.taken,     bg: "var(--success-light)", color: "var(--success)" },
-                          { label: "Doses Missed",    value: selectedData.missed,    bg: "var(--danger-light)", color: "var(--danger)" },
-                          { label: "Daily Rate", value: `${selectedData.adherence ?? 0}%`, bg: "var(--primary-light)", color: "var(--primary)" },
-                        ].map(({ label, value, bg, color }) => (
-                          <div key={label} style={{ background: bg, borderRadius: "12px", padding: "14px 8px", textAlign: "center", border: "1px solid rgba(0,0,0,0.02)" }}>
-                            <div style={{ fontSize: "20px", fontWeight: "800", color }}>{value}</div>
-                            <div style={{ fontSize: "11px", color: "var(--text-light)", marginTop: "4px", fontWeight: "700" }}>{label}</div>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Adherence progress bar */}
-                      <div style={{ background: "#cbd5e1", borderRadius: "10px", height: "8px", overflow: "hidden", marginBottom: "24px" }}>
-                        <div style={{
-                          height: "100%", borderRadius: "10px", transition: "width 0.5s ease",
-                          width: `${selectedData.adherence ?? 0}%`,
-                          background: (selectedData.adherence ?? 0) >= 80 ? "var(--success)"
-                                     : (selectedData.adherence ?? 0) >= 50 ? "var(--warning)" : "var(--danger)"
-                        }} />
-                      </div>
-                    </>
+            <Card style={{ position: "sticky", top: "var(--space-6)" }}>
+              <div style={{
+                display: "flex",
+                alignItems: "flex-start",
+                justifyContent: "space-between",
+                padding: "var(--space-6) var(--space-6) 0"
+              }}>
+                <div style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "var(--space-3)"
+                }}>
+                  <h3 style={{
+                    margin: "0",
+                    color: "var(--text-primary)",
+                    fontWeight: "600"
+                  }}>
+                    {selectedDate.toLocaleDateString("en-US", {
+                      weekday: "long", 
+                      day: "numeric", 
+                      month: "long", 
+                      year: "numeric"
+                    })}
+                  </h3>
+                  {selectedStr === todayStr && (
+                    <Badge variant="info" size="sm">Today</Badge>
                   )}
-
-                  {/* Scheduled & recorded medicines list */}
-                  <div style={{ marginTop: "16px", textAlign: "left" }}>
-                    <h5 style={{ fontWeight: "800", color: "var(--text-muted)", fontSize: "12px", marginBottom: "14px", textTransform: "uppercase", letterSpacing: "0.8px" }}>
-                      Allocated Medication Alarms ({scheduledForSelected.length})
-                    </h5>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                      {scheduledForSelected.map((med) => {
-                        const times = med.times?.length > 0 ? med.times : [med.time];
-                        return times.map((t, idx) => {
-                          const logged = selectedData?.doseLogs?.find(l => l.medicineName === med.name && l.scheduledTime === t);
-                          const status = logged ? logged.status : (selectedStr > todayStr ? "scheduled" : "pending");
-
-                          return (
-                            <div key={`${med._id}-${t}-${idx}`} style={{
-                              display: "flex", alignItems: "center", justifyContent: "space-between",
-                              padding: "14px 18px", borderRadius: "14px", border: "1px solid var(--border-light)",
-                              background: status === "taken" ? "var(--success-light)" : status === "missed" ? "var(--danger-light)" : "#f8fafc"
-                            }}>
-                              <div>
-                                <div style={{ fontWeight: "800", color: "var(--text-main)", fontSize: "14px" }}>
-                                  {med.name} <span style={{ fontSize: "12px", color: "var(--text-light)", fontWeight: "500" }}>({med.dosage})</span>
-                                </div>
-                                <div style={{ fontSize: "12px", color: "var(--text-light)", marginTop: "4px", fontWeight: "600" }}>
-                                  Alarm: {formatTo12Hour(t)}
-                                  {logged?.takenAt && (
-                                    <span style={{ marginLeft: "8px", color: "var(--success)", fontWeight: "700" }}>
-                                      • Logged at {new Date(logged.takenAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                              <span style={{
-                                background: status === "taken" ? "#dcfce7" : status === "missed" ? "#fee2e2" : "#e0f2fe",
-                                color: status === "taken" ? "#15803d" : status === "missed" ? "#b91c1c" : "#0369a1",
-                                padding: "6px 12px", borderRadius: "12px", fontSize: "11px", fontWeight: "800",
-                                textTransform: "uppercase", letterSpacing: "0.5px"
-                              }}>
-                                {status === "taken" ? "Taken ✓" : status === "missed" ? "Missed ✕" : "Pending"}
-                              </span>
-                            </div>
-                          );
-                        });
-                      })}
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <div style={{ color: "var(--text-light)", textAlign: "center", padding: "40px", fontSize: "14px", fontWeight: "600" }}>
-                  No active medicine schedules configured for this calendar date.
                 </div>
-              )}
-            </div>
+              </div>
+
+              <div style={{ padding: "0 var(--space-6) var(--space-6)" }}>
+                {loading ? (
+                  <div style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: "var(--space-4)",
+                    padding: "var(--space-8)",
+                    color: "var(--text-secondary)"
+                  }}>
+                    <div style={{ animation: "spin 1s linear infinite" }}>
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                      </svg>
+                    </div>
+                    <p>Loading schedule details...</p>
+                  </div>
+                ) : (selectedData && selectedData.total > 0) || scheduledForSelected.length > 0 ? (
+                  <>
+                    {/* Adherence Stats */}
+                    {selectedData && selectedData.total > 0 && (
+                      <div style={{ marginBottom: "var(--space-6)" }}>
+                        <h4 style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "var(--space-2)",
+                          margin: "0 0 var(--space-4) 0",
+                          color: "var(--text-primary)",
+                          fontWeight: "600"
+                        }}>
+                          Daily Adherence
+                        </h4>
+                        
+                        <div style={{
+                          display: "grid",
+                          gridTemplateColumns: "repeat(3, 1fr)",
+                          gap: "var(--space-3)",
+                          marginBottom: "var(--space-4)"
+                        }}>
+                          <div style={{
+                            textAlign: "center",
+                            padding: "var(--space-4)",
+                            borderRadius: "var(--radius-lg)",
+                            border: "1px solid var(--success-soft)",
+                            background: "var(--success-light)"
+                          }}>
+                            <div style={{
+                              fontSize: "20px",
+                              fontWeight: "800",
+                              marginBottom: "var(--space-1)",
+                              color: "var(--success-hover)"
+                            }}>{selectedData.taken}</div>
+                            <div style={{
+                              fontSize: "12px",
+                              color: "var(--text-secondary)",
+                              fontWeight: "500"
+                            }}>Taken</div>
+                          </div>
+                          <div style={{
+                            textAlign: "center",
+                            padding: "var(--space-4)",
+                            borderRadius: "var(--radius-lg)",
+                            border: "1px solid var(--danger-soft)",
+                            background: "var(--danger-light)"
+                          }}>
+                            <div style={{
+                              fontSize: "20px",
+                              fontWeight: "800",
+                              marginBottom: "var(--space-1)",
+                              color: "var(--danger-hover)"
+                            }}>{selectedData.missed}</div>
+                            <div style={{
+                              fontSize: "12px",
+                              color: "var(--text-secondary)",
+                              fontWeight: "500"
+                            }}>Missed</div>
+                          </div>
+                          <div style={{
+                            textAlign: "center",
+                            padding: "var(--space-4)",
+                            borderRadius: "var(--radius-lg)",
+                            border: "1px solid var(--primary-soft)",
+                            background: "var(--primary-light)"
+                          }}>
+                            <div style={{
+                              fontSize: "20px",
+                              fontWeight: "800",
+                              marginBottom: "var(--space-1)",
+                              color: "var(--primary-hover)"
+                            }}>{selectedData.adherence ?? 0}%</div>
+                            <div style={{
+                              fontSize: "12px",
+                              color: "var(--text-secondary)",
+                              fontWeight: "500"
+                            }}>Adherence Rate</div>
+                          </div>
+                        </div>
+
+                        <ProgressBar 
+                          value={selectedData.adherence ?? 0} 
+                          max={100}
+                          variant={
+                            (selectedData.adherence ?? 0) >= 80 ? "success" :
+                            (selectedData.adherence ?? 0) >= 50 ? "warning" : "error"
+                          }
+                        />
+                      </div>
+                    )}
+
+                    {/* Scheduled Medications */}
+                    <div style={{ marginTop: "var(--space-6)" }}>
+                      <h4 style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "var(--space-2)",
+                        margin: "0 0 var(--space-4) 0",
+                        color: "var(--text-primary)",
+                        fontWeight: "600"
+                      }}>
+                        Scheduled Medications 
+                        <Badge variant="neutral" size="sm">
+                          {scheduledForSelected.length}
+                        </Badge>
+                      </h4>
+                      
+                      <div style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "var(--space-3)"
+                      }}>
+                        {scheduledForSelected.map((med) => {
+                          const times = med.times?.length > 0 ? med.times : [med.time];
+                          return times.map((t, idx) => {
+                            const logged = selectedData?.doseLogs?.find(l => 
+                              l.medicineName === med.name && l.scheduledTime === t
+                            );
+                            const status = logged ? logged.status : 
+                              (selectedStr > todayStr ? "scheduled" : "pending");
+
+                            return (
+                              <div key={`${med._id}-${t}-${idx}`} style={{
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                padding: "var(--space-4)",
+                                borderRadius: "var(--radius-lg)",
+                                border: "1px solid var(--border)",
+                                background: status === "taken" ? "var(--success-light)" : 
+                                           status === "missed" ? "var(--danger-light)" : "var(--bg-card)",
+                                transition: "all var(--duration-normal) var(--ease)",
+                                ...(status === "taken" ? { borderLeft: "4px solid var(--success)" } : {}),
+                                ...(status === "missed" ? { borderLeft: "4px solid var(--danger)" } : {})
+                              }}>
+                                <div style={{ flex: "1" }}>
+                                  <div style={{
+                                    fontWeight: "600",
+                                    color: "var(--text-primary)",
+                                    marginBottom: "var(--space-1)"
+                                  }}>
+                                    {med.name}
+                                    <span style={{
+                                      fontWeight: "400",
+                                      color: "var(--text-secondary)",
+                                      fontSize: "14px"
+                                    }}>({med.dosage})</span>
+                                  </div>
+                                  <div style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "var(--space-2)",
+                                    fontSize: "14px",
+                                    color: "var(--text-secondary)"
+                                  }}>
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                      <circle cx="12" cy="12" r="10"/>
+                                      <polyline points="12,6 12,12 16,14"/>
+                                    </svg>
+                                    {formatTo12Hour(t)}
+                                    {logged?.takenAt && (
+                                      <span style={{
+                                        color: "var(--success)",
+                                        fontWeight: "500"
+                                      }}>
+                                        • Taken at {new Date(logged.takenAt).toLocaleTimeString([], { 
+                                          hour: '2-digit', 
+                                          minute: '2-digit' 
+                                        })}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                
+                                <Badge 
+                                  variant={
+                                    status === "taken" ? "success" :
+                                    status === "missed" ? "danger" : "neutral"
+                                  }
+                                  size="sm"
+                                >
+                                  {status === "taken" ? "✓ Taken" :
+                                   status === "missed" ? "✕ Missed" : "Pending"}
+                                </Badge>
+                              </div>
+                            );
+                          });
+                        })}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    textAlign: "center",
+                    padding: "var(--space-8)",
+                    color: "var(--text-secondary)"
+                  }}>
+                    <div style={{ marginBottom: "var(--space-4)", color: "var(--text-muted)" }}>
+                      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <path d="M8 2v4"/>
+                        <path d="M16 2v4"/>
+                        <rect width="18" height="18" x="3" y="4" rx="2"/>
+                        <path d="M3 10h18"/>
+                      </svg>
+                    </div>
+                    <h4 style={{
+                      margin: "0 0 var(--space-2) 0",
+                      color: "var(--text-primary)",
+                      fontWeight: "600"
+                    }}>No medications scheduled</h4>
+                    <p style={{
+                      margin: "0",
+                      color: "var(--text-secondary)",
+                      maxWidth: "300px"
+                    }}>
+                      No active medication schedules are configured for this date.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </Card>
           )}
-        </main>
-        <Footer />
+        </div>
       </div>
-    </div>
+    </AppShell>
   );
 }
 

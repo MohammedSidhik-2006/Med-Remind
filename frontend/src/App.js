@@ -2,7 +2,10 @@ import React, { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ToastProvider } from "./components/Toast";
-import { SkeletonCard } from "./components/Skeleton";
+import LoadingSpinner from "./components/LoadingSpinner";
+
+// Import design system
+import "./styles/design-system.css";
 
 // Lazy-loaded page components for route-level code splitting & bundle size optimization
 const Login = lazy(() => import("./pages/Login"));
@@ -20,21 +23,12 @@ const CaregiverLinking = lazy(() => import("./pages/CaregiverLinking"));
 const CaregiverDashboard = lazy(() => import("./pages/CaregiverDashboard"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
-function PageLoader() {
-  return (
-    <div style={{ maxWidth: "680px", margin: "40px auto", padding: "0 20px" }}>
-      <SkeletonCard />
-      <SkeletonCard />
-    </div>
-  );
-}
-
 function App() {
   return (
     <ErrorBoundary>
       <ToastProvider>
         <BrowserRouter>
-          <Suspense fallback={<PageLoader />}>
+          <Suspense fallback={<LoadingSpinner />}>
             <Routes>
               <Route path="/" element={<Login />} />
               <Route path="/register" element={<Register />} />

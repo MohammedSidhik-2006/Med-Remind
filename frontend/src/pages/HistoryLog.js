@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import Navbar from "../components/Navbar";
-import Sidebar from "../components/Sidebar";
-import Footer from "../components/Footer";
+import AppShell from "../components/AppShell";
+import Button from "../components/UI/Button";
+import Card from "../components/UI/Card";
+import Badge from "../components/UI/Badge";
+import ProgressBar from "../components/UI/ProgressBar";
 import API from "../services/api";
 
 function HistoryLog() {
@@ -10,7 +12,6 @@ function HistoryLog() {
   const [logs,    setLogs]    = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter,  setFilter]  = useState("all"); // "all" | "taken" | "missed"
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Auth guard
   useEffect(() => {
@@ -46,179 +47,612 @@ function HistoryLog() {
     ? Math.round((countTaken / logs.length) * 100) : 0;
 
   return (
-    <div className="dashboard-container">
-      {/* Sidebar navigation */}
-      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+    <AppShell>
+      <div className="page-container">
+        {/* Page Header */}
+        <div className="page-header">
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => navigate("/dashboard")}
+            className="back-button"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="m15 18-6-6 6-6"/>
+            </svg>
+            Back
+          </Button>
+          <div className="page-header-content">
+            <h1 className="page-title">Medication History</h1>
+            <p className="page-subtitle">View your medication adherence logs and patterns</p>
+          </div>
+        </div>
 
-      {/* Main Layout Area */}
-      <div className="main-layout-content">
-        <Navbar onToggleSidebar={() => setIsSidebarOpen(true)} />
-
-        <header className="page-header">
-          <button className="back-btn" onClick={() => navigate("/dashboard")}>←</button>
-          <h2 className="page-title">Adherence Logs</h2>
-        </header>
-
-        <main className="dashboard" style={{ maxWidth: "700px" }}>
-          
-          {/* Statistics summary row */}
-          <div style={{
-            display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "12px", marginBottom: "24px"
-          }}>
-            {[
-              { label: "Total Logs",  value: logs.length,  color: "var(--text-main)", icon: "📋" },
-              { label: "Taken Doses",       value: countTaken,   color: "var(--success)", icon: "✓" },
-              { label: "Missed Doses",      value: countMissed,  color: "var(--danger)", icon: "✕" },
-            ].map(({ label, value, color, icon }) => (
-              <div key={label} style={{
-                background: "white", borderRadius: "14px", padding: "16px",
-                textAlign: "center", boxShadow: "var(--shadow-sm)", border: "1px solid var(--border-light)"
-              }}>
-                <div style={{ fontSize: "14px", color: "var(--text-light)" }}>{icon}</div>
-                <div style={{ fontSize: "24px", fontWeight: "800", color, marginTop: "4px" }}>{value}</div>
-                <div style={{ fontSize: "11px", color: "var(--text-light)", marginTop: "6px", fontWeight: "750", textTransform: "uppercase", letterSpacing: "0.5px" }}>{label}</div>
+        <div className="page-content">
+          {/* Statistics Overview */}
+          <div className="stats-grid">
+            <Card className="stat-card total">
+              <div className="stat-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14,2 14,8 20,8"/>
+                  <line x1="16" y1="13" x2="8" y2="13"/>
+                  <line x1="16" y1="17" x2="8" y2="17"/>
+                </svg>
               </div>
-            ))}
+              <div className="stat-content">
+                <div className="stat-value">{logs.length}</div>
+                <div className="stat-label">Total Logs</div>
+              </div>
+            </Card>
+
+            <Card className="stat-card success">
+              <div className="stat-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="20,6 9,17 4,12"/>
+                </svg>
+              </div>
+              <div className="stat-content">
+                <div className="stat-value">{countTaken}</div>
+                <div className="stat-label">Taken Doses</div>
+              </div>
+            </Card>
+
+            <Card className="stat-card error">
+              <div className="stat-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="m18 6-12 12"/>
+                  <path d="m6 6 12 12"/>
+                </svg>
+              </div>
+              <div className="stat-content">
+                <div className="stat-value">{countMissed}</div>
+                <div className="stat-label">Missed Doses</div>
+              </div>
+            </Card>
           </div>
 
-          {/* Overall compliance tracker bar */}
+          {/* Overall Adherence */}
           {logs.length > 0 && (
-            <div className="schedule-card" style={{ padding: "20px 24px", marginBottom: "24px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px", alignItems: "center" }}>
-                <span style={{ fontSize: "14px", fontWeight: "800", color: "var(--text-main)" }}>Overall Compliance Ratio</span>
-                <span style={{ fontSize: "14px", fontWeight: "800",
-                  color: adherence >= 80 ? "var(--success)" : adherence >= 50 ? "var(--warning-hover)" : "var(--danger)"
-                }}>{adherence}%</span>
+            <Card className="adherence-card">
+              <div className="card-header">
+                <div className="adherence-header">
+                  <h3 className="adherence-title">Overall Adherence Rate</h3>
+                  <Badge 
+                    variant={
+                      adherence >= 80 ? "success" :
+                      adherence >= 50 ? "warning" : "error"
+                    }
+                    size="lg"
+                  >
+                    {adherence}%
+                  </Badge>
+                </div>
               </div>
-              <div style={{ background: "#cbd5e1", borderRadius: "10px", height: "8px", overflow: "hidden" }}>
-                <div style={{
-                  height: "100%", borderRadius: "10px", transition: "width 0.5s ease",
-                  width: `${adherence}%`,
-                  background: adherence >= 80 ? "var(--success)" : adherence >= 50 ? "var(--warning)" : "var(--danger)"
-                }} />
+              <div className="card-content">
+                <ProgressBar 
+                  value={adherence} 
+                  max={100}
+                  variant={
+                    adherence >= 80 ? "success" :
+                    adherence >= 50 ? "warning" : "error"
+                  }
+                  showPercentage={false}
+                />
+                <div className="adherence-description">
+                  <p>
+                    {adherence >= 90 ? "Excellent adherence! Keep up the great work." :
+                     adherence >= 80 ? "Good adherence. Try to maintain consistency." :
+                     adherence >= 60 ? "Fair adherence. Consider setting more reminders." :
+                     "Poor adherence. Please consult with your healthcare provider."}
+                  </p>
+                </div>
               </div>
-            </div>
+            </Card>
           )}
 
-          {/* Filter tabs */}
-          <div style={{ display: "flex", gap: "10px", marginBottom: "20px", flexWrap: "wrap" }}>
-            {[
-              { key: "all",    label: `All Logs (${logs.length})`,         color: "var(--text-muted)", activeBg: "var(--text-muted)", text: "white" },
-              { key: "taken",  label: `Taken Doses (${countTaken})`,      color: "var(--success)", activeBg: "var(--success)", text: "white" },
-              { key: "missed", label: `Missed Doses (${countMissed})`,    color: "var(--danger)", activeBg: "var(--danger)", text: "white" },
-            ].map(({ key, label, color, activeBg, text }) => (
-              <button key={key} onClick={() => setFilter(key)} style={{
-                padding: "8px 18px", borderRadius: "20px",
-                cursor: "pointer", fontWeight: "700", fontSize: "12px",
-                background: filter === key ? activeBg : "white",
-                color: filter === key ? text : "var(--text-light)",
-                border: filter === key ? "none" : "1px solid var(--border-light)",
-                boxShadow: filter === key ? "var(--shadow-sm)" : "none",
-                transition: "var(--transition-smooth)"
-              }}>{label}</button>
-            ))}
+          {/* Filter Tabs */}
+          <div className="filter-tabs">
+            <Button
+              variant={filter === "all" ? "primary" : "ghost"}
+              size="sm"
+              onClick={() => setFilter("all")}
+            >
+              All Logs ({logs.length})
+            </Button>
+            <Button
+              variant={filter === "taken" ? "success" : "ghost"}
+              size="sm"
+              onClick={() => setFilter("taken")}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="20,6 9,17 4,12"/>
+              </svg>
+              Taken ({countTaken})
+            </Button>
+            <Button
+              variant={filter === "missed" ? "danger" : "ghost"}
+              size="sm"
+              onClick={() => setFilter("missed")}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="m18 6-12 12"/>
+                <path d="m6 6 12 12"/>
+              </svg>
+              Missed ({countMissed})
+            </Button>
           </div>
 
-          {/* History log main card */}
-          <div className="form-card" style={{ padding: "30px 24px" }}>
-            {loading ? (
-              <div style={{ textAlign: "center", padding: "40px", color: "var(--text-light)", fontWeight: "600" }}>
-                Fetching compliance history...
-              </div>
-            ) : dates.length === 0 ? (
-              <div className="empty-state">
-                <div className="empty-state-icon" style={{ fontSize: "32px", color: "var(--primary)", border: "2px dashed var(--primary)", width: "60px", height: "60px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 15px auto", fontWeight: "800" }}>Rx</div>
-                <p style={{ fontWeight: "600", color: "var(--text-light)" }}>
-                  {filter === "all" ? "No dose logs found. Start completing schedules to build log history." : `No ${filter} doses recorded.`}
-                </p>
-              </div>
-            ) : (
-              dates.map(date => (
-                <div key={date} style={{ marginBottom: "24px" }}>
-                  {/* Date header */}
-                  <div style={{
-                    display: "flex", alignItems: "center", gap: "12px",
-                    marginBottom: "12px", padding: "0 2px"
-                  }}>
-                    <div style={{
-                      fontSize: "12px", fontWeight: "800", color: "var(--text-light)",
-                      textTransform: "uppercase", letterSpacing: "0.8px", whiteSpace: "nowrap"
-                    }}>
-                      {new Date(date + "T00:00:00").toLocaleDateString("en-US", {
-                        weekday: "short", day: "numeric", month: "short", year: "numeric"
-                      })}
-                    </div>
-                    <div style={{ flex: 1, height: "1px", background: "var(--border-light)" }} />
-                    <span style={{
-                      fontSize: "11px", fontWeight: "800", padding: "2px 10px", borderRadius: "20px",
-                      background: grouped[date].every(l => l.status === "taken") ? "var(--success-light)"
-                                : grouped[date].every(l => l.status === "missed") ? "var(--danger-light)" : "var(--warning-light)",
-                      color:      grouped[date].every(l => l.status === "taken") ? "var(--success)"
-                                : grouped[date].every(l => l.status === "missed") ? "var(--danger)" : "var(--warning-hover)",
-                      textTransform: "uppercase", letterSpacing: "0.5px"
-                    }}>
-                      {grouped[date].filter(l => l.status === "taken").length}/{grouped[date].length} Taken
-                    </span>
+          {/* History Timeline */}
+          <Card className="history-card">
+            <div className="card-header">
+              <h3 className="card-title">
+                Medication Timeline
+                {filtered.length !== logs.length && (
+                  <Badge variant="neutral" size="sm">
+                    Showing {filtered.length} of {logs.length}
+                  </Badge>
+                )}
+              </h3>
+            </div>
+
+            <div className="card-content">
+              {loading ? (
+                <div className="loading-state">
+                  <div className="loading-spinner">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                    </svg>
                   </div>
-
-                  {/* Logs items */}
-                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                    {grouped[date].map((log, i) => (
-                      <div key={i} style={{
-                        display: "flex", alignItems: "center", gap: "16px",
-                        padding: "14px 18px",
-                        background: "white", borderRadius: "12px",
-                        boxShadow: "var(--shadow-sm)",
-                        border: "1.5px solid var(--border-light)",
-                        borderLeft: `5px solid ${log.status === "taken" ? "var(--success)" : "var(--danger)"}`
-                      }}>
-                        <div style={{
-                          width: "32px", height: "32px", borderRadius: "50%", flexShrink: 0,
-                          background: log.status === "taken" ? "var(--success-light)" : "var(--danger-light)",
-                          display: "flex", alignItems: "center", justifyContent: "center", fontSize: "14px",
-                          fontWeight: "800", color: log.status === "taken" ? "var(--success)" : "var(--danger)"
-                        }}>
-                          {log.status === "taken" ? "✓" : "✗"}
-                        </div>
-
-                        <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
-                          <div style={{ fontWeight: "800", color: "var(--text-main)", fontSize: "15px",
-                            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"
-                          }}>
-                            {log.medicineName}
-                          </div>
-                          <div style={{ fontSize: "12px", color: "var(--text-light)", marginTop: "4px",
-                            display: "flex", gap: "12px", flexWrap: "wrap", fontWeight: "600"
-                          }}>
-                            {log.dosage      && <span>Dosage: {log.dosage}</span>}
-                            {log.scheduledTime && <span>Scheduled Time: {log.scheduledTime}</span>}
-                            {log.takenAt && (
-                              <span>Logged: {new Date(log.takenAt).toLocaleTimeString("en-US", {
-                                hour: "2-digit", minute: "2-digit"
-                              })}</span>
-                            )}
-                          </div>
-                        </div>
-
-                        <span style={{
-                          flexShrink: 0, padding: "4px 12px", borderRadius: "12px",
-                          fontSize: "11px", fontWeight: "800", textTransform: "uppercase", letterSpacing: "0.5px",
-                          background: log.status === "taken" ? "var(--success-light)" : "var(--danger-light)",
-                          color:      log.status === "taken" ? "var(--success)" : "var(--danger)"
-                        }}>
-                          {log.status === "taken" ? "Taken" : "Missed"}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+                  <p>Loading medication history...</p>
                 </div>
-              ))
-            )}
-          </div>
-        </main>
-        <Footer />
+              ) : dates.length === 0 ? (
+                <div className="empty-state">
+                  <div className="empty-state-icon">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <path d="M9 12h6"/>
+                      <path d="M12 9v6"/>
+                      <circle cx="12" cy="12" r="10"/>
+                    </svg>
+                  </div>
+                  <h4 className="empty-state-title">
+                    {filter === "all" ? "No medication logs found" : `No ${filter} doses recorded`}
+                  </h4>
+                  <p className="empty-state-description">
+                    {filter === "all" 
+                      ? "Start taking your medications to build your adherence history."
+                      : `No ${filter} medication doses have been recorded yet.`
+                    }
+                  </p>
+                </div>
+              ) : (
+                <div className="timeline">
+                  {dates.map(date => (
+                    <div key={date} className="timeline-day">
+                      {/* Date Header */}
+                      <div className="timeline-date-header">
+                        <div className="timeline-date">
+                          <div className="date-text">
+                            {new Date(date + "T00:00:00").toLocaleDateString("en-US", {
+                              weekday: "short", 
+                              day: "numeric", 
+                              month: "short", 
+                              year: "numeric"
+                            })}
+                          </div>
+                        </div>
+                        
+                        <div className="timeline-date-divider" />
+                        
+                        <Badge 
+                          variant={
+                            grouped[date].every(l => l.status === "taken") ? "success" :
+                            grouped[date].every(l => l.status === "missed") ? "error" : "warning"
+                          }
+                          size="sm"
+                        >
+                          {grouped[date].filter(l => l.status === "taken").length}/{grouped[date].length} Taken
+                        </Badge>
+                      </div>
+
+                      {/* Timeline Items */}
+                      <div className="timeline-items">
+                        {grouped[date].map((log, i) => (
+                          <div key={i} className={`timeline-item ${log.status}`}>
+                            <div className="timeline-item-indicator">
+                              {log.status === "taken" ? (
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                  <polyline points="20,6 9,17 4,12"/>
+                                </svg>
+                              ) : (
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                  <path d="m18 6-12 12"/>
+                                  <path d="m6 6 12 12"/>
+                                </svg>
+                              )}
+                            </div>
+
+                            <div className="timeline-item-content">
+                              <div className="timeline-item-header">
+                                <h5 className="medication-name">{log.medicineName}</h5>
+                                <Badge 
+                                  variant={log.status === "taken" ? "success" : "danger"}
+                                  size="sm"
+                                >
+                                  {log.status === "taken" ? "Taken" : "Missed"}
+                                </Badge>
+                              </div>
+
+                              <div className="timeline-item-details">
+                                {log.dosage && (
+                                  <div className="detail-item">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                      <rect width="7" height="18" x="3" y="3" rx="1"/>
+                                      <rect width="7" height="7" x="14" y="3" rx="1"/>
+                                      <rect width="7" height="7" x="14" y="14" rx="1"/>
+                                    </svg>
+                                    <span>Dosage: {log.dosage}</span>
+                                  </div>
+                                )}
+                                
+                                {log.scheduledTime && (
+                                  <div className="detail-item">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                      <circle cx="12" cy="12" r="10"/>
+                                      <polyline points="12,6 12,12 16,14"/>
+                                    </svg>
+                                    <span>Scheduled: {log.scheduledTime}</span>
+                                  </div>
+                                )}
+                                
+                                {log.takenAt && (
+                                  <div className="detail-item taken-time">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                      <polyline points="20,6 9,17 4,12"/>
+                                    </svg>
+                                    <span>
+                                      Taken: {new Date(log.takenAt).toLocaleTimeString("en-US", {
+                                        hour: "2-digit", 
+                                        minute: "2-digit"
+                                      })}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </Card>
+        </div>
       </div>
-    </div>
+      
+      <style jsx>{`
+        .page-container {
+          max-width: 900px;
+          margin: 0 auto;
+          padding: var(--spacing-6);
+        }
+
+        .page-header {
+          margin-bottom: var(--spacing-8);
+        }
+
+        .back-button {
+          margin-bottom: var(--spacing-4);
+        }
+
+        .page-header-content h1 {
+          margin: 0 0 var(--spacing-2) 0;
+          color: var(--text-primary);
+        }
+
+        .page-subtitle {
+          color: var(--text-secondary);
+          margin: 0;
+          font-size: var(--font-sm);
+        }
+
+        .page-content {
+          display: flex;
+          flex-direction: column;
+          gap: var(--spacing-6);
+        }
+
+        .stats-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: var(--spacing-4);
+        }
+
+        .stat-card {
+          display: flex;
+          align-items: center;
+          gap: var(--spacing-4);
+          padding: var(--spacing-5);
+        }
+
+        .stat-card.total .stat-icon {
+          color: var(--text-secondary);
+          background: var(--gray-100);
+        }
+
+        .stat-card.success .stat-icon {
+          color: var(--success-600);
+          background: var(--success-50);
+        }
+
+        .stat-card.error .stat-icon {
+          color: var(--error-600);
+          background: var(--error-50);
+        }
+
+        .stat-icon {
+          flex-shrink: 0;
+          width: 48px;
+          height: 48px;
+          border-radius: var(--radius-lg);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .stat-content {
+          flex: 1;
+        }
+
+        .stat-value {
+          font-size: var(--font-2xl);
+          font-weight: var(--font-bold);
+          color: var(--text-primary);
+          line-height: 1;
+        }
+
+        .stat-label {
+          font-size: var(--font-sm);
+          color: var(--text-secondary);
+          font-weight: var(--font-medium);
+          margin-top: var(--spacing-1);
+        }
+
+        .adherence-card {
+          margin-bottom: var(--spacing-2);
+        }
+
+        .adherence-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+        }
+
+        .adherence-title {
+          margin: 0;
+          color: var(--text-primary);
+          font-size: var(--font-lg);
+          font-weight: var(--font-semibold);
+        }
+
+        .adherence-description {
+          margin-top: var(--spacing-3);
+        }
+
+        .adherence-description p {
+          margin: 0;
+          color: var(--text-secondary);
+          font-size: var(--font-sm);
+        }
+
+        .filter-tabs {
+          display: flex;
+          gap: var(--spacing-2);
+          flex-wrap: wrap;
+        }
+
+        .history-card {
+          flex: 1;
+        }
+
+        .loading-state {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: var(--spacing-4);
+          padding: var(--spacing-8);
+          color: var(--text-secondary);
+        }
+
+        .loading-spinner {
+          animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+          to {
+            transform: rotate(360deg);
+          }
+        }
+
+        .empty-state {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          text-align: center;
+          padding: var(--spacing-8);
+          color: var(--text-secondary);
+        }
+
+        .empty-state-icon {
+          margin-bottom: var(--spacing-4);
+          color: var(--text-tertiary);
+        }
+
+        .empty-state-title {
+          margin: 0 0 var(--spacing-2) 0;
+          color: var(--text-primary);
+          font-size: var(--font-lg);
+          font-weight: var(--font-semibold);
+        }
+
+        .empty-state-description {
+          margin: 0;
+          color: var(--text-secondary);
+          max-width: 400px;
+        }
+
+        .timeline {
+          display: flex;
+          flex-direction: column;
+          gap: var(--spacing-6);
+        }
+
+        .timeline-day {
+          position: relative;
+        }
+
+        .timeline-date-header {
+          display: flex;
+          align-items: center;
+          gap: var(--spacing-4);
+          margin-bottom: var(--spacing-4);
+        }
+
+        .timeline-date {
+          flex-shrink: 0;
+        }
+
+        .date-text {
+          font-size: var(--font-sm);
+          font-weight: var(--font-bold);
+          color: var(--text-secondary);
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+        }
+
+        .timeline-date-divider {
+          flex: 1;
+          height: 1px;
+          background: var(--border-color);
+        }
+
+        .timeline-items {
+          display: flex;
+          flex-direction: column;
+          gap: var(--spacing-3);
+          position: relative;
+        }
+
+        .timeline-item {
+          display: flex;
+          align-items: flex-start;
+          gap: var(--spacing-4);
+          padding: var(--spacing-4);
+          background: var(--surface);
+          border-radius: var(--radius-lg);
+          border: 1px solid var(--border-color);
+          position: relative;
+        }
+
+        .timeline-item.taken {
+          border-left: 4px solid var(--success-500);
+          background: var(--success-50);
+        }
+
+        .timeline-item.missed {
+          border-left: 4px solid var(--error-500);
+          background: var(--error-50);
+        }
+
+        .timeline-item-indicator {
+          flex-shrink: 0;
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin-top: var(--spacing-1);
+        }
+
+        .timeline-item.taken .timeline-item-indicator {
+          background: var(--success-100);
+          color: var(--success-700);
+        }
+
+        .timeline-item.missed .timeline-item-indicator {
+          background: var(--error-100);
+          color: var(--error-700);
+        }
+
+        .timeline-item-content {
+          flex: 1;
+          min-width: 0;
+        }
+
+        .timeline-item-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: var(--spacing-2);
+        }
+
+        .medication-name {
+          margin: 0;
+          color: var(--text-primary);
+          font-size: var(--font-base);
+          font-weight: var(--font-semibold);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .timeline-item-details {
+          display: flex;
+          flex-direction: column;
+          gap: var(--spacing-2);
+        }
+
+        .detail-item {
+          display: flex;
+          align-items: center;
+          gap: var(--spacing-2);
+          font-size: var(--font-sm);
+          color: var(--text-secondary);
+        }
+
+        .detail-item.taken-time {
+          color: var(--success-700);
+          font-weight: var(--font-medium);
+        }
+
+        @media (max-width: 768px) {
+          .page-container {
+            padding: var(--spacing-4);
+          }
+
+          .stats-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .filter-tabs {
+            flex-direction: column;
+          }
+
+          .timeline-item-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: var(--spacing-2);
+          }
+
+          .timeline-item-details {
+            gap: var(--spacing-1);
+          }
+        }
+      `}</style>
+    </AppShell>
   );
 }
 

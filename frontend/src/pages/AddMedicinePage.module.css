@@ -1,0 +1,311 @@
+.pageContainer {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: var(--space-6);
+}
+
+.pageHeader {
+  margin-bottom: var(--space-8);
+}
+
+.backButton {
+  margin-bottom: var(--space-4);
+}
+
+.pageHeaderContent h1 {
+  margin: 0 0 var(--space-2) 0;
+  color: var(--text-primary);
+}
+
+.pageSubtitle {
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.medicationFormCard {
+  margin-bottom: var(--space-6);
+}
+
+.cardHeader {
+  padding: var(--space-6) var(--space-6) 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: var(--space-6);
+}
+
+.cardTitle {
+  margin: 0 0 var(--space-2) 0;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.cardSubtitle {
+  margin: 0 0 var(--space-6) 0;
+  color: var(--text-secondary);
+}
+
+.cardContent {
+  padding: 0 var(--space-6) var(--space-6);
+}
+
+.alert {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-6);
+  border: 1px solid;
+}
+
+.alertError {
+  background-color: var(--danger-light);
+  border-color: var(--danger-soft);
+  color: var(--danger);
+}
+
+.alertContent {
+  flex: 1;
+}
+
+.alertTitle {
+  font-weight: 600;
+  margin: 0 0 var(--space-1) 0;
+}
+
+.alertDescription {
+  margin: 0;
+}
+
+.alertClose {
+  margin-left: auto;
+}
+
+.medicationForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.formSection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.formSectionTitle {
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.formSectionSubtitle {
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.formGrid {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.gridCols2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.timePeriodsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--space-3);
+}
+
+.timePeriodCard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 2px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+  cursor: pointer;
+  transition: all var(--duration-normal) var(--ease);
+}
+
+.timePeriodCard:hover {
+  border-color: var(--primary);
+  background: var(--primary-light);
+}
+
+.timePeriodCard.selected {
+  border-color: var(--primary);
+  background: var(--primary-light);
+}
+
+.timePeriodIcon {
+  font-size: 24px;
+}
+
+.timePeriodLabel {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.timePeriodHint {
+  color: var(--text-muted);
+}
+
+.timePeriodSelectedIndicator {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.frequencyGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-4);
+}
+
+.frequencyCard {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-5) var(--space-4);
+  border: 2px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+  cursor: pointer;
+  transition: all var(--duration-normal) var(--ease);
+  font-weight: 600;
+}
+
+.frequencyCard:hover {
+  border-color: var(--primary);
+  background: var(--primary-light);
+}
+
+.frequencyCard.selected {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: white;
+}
+
+.frequencyIcon {
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.frequencySelectedIndicator {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--primary-hover);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.timesList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.timeInputRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.timeBadge {
+  min-width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+}
+
+.infoCard {
+  display: flex;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  background: var(--primary-light);
+  border: 1px solid var(--primary-soft);
+  border-radius: var(--radius-lg);
+  margin-top: var(--space-4);
+}
+
+.infoCardIcon {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  background: var(--primary);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.infoCardContent {
+  flex: 1;
+}
+
+.infoCardTitle {
+  margin: 0 0 var(--space-1) 0;
+  font-weight: 600;
+  color: var(--primary-hover);
+}
+
+.infoCardText {
+  margin: 0;
+  color: var(--primary-hover);
+  line-height: 1.5;
+}
+
+.formActions {
+  display: flex;
+  gap: var(--space-4);
+  justify-content: flex-end;
+  margin-top: var(--space-6);
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--border);
+}
+
+@media (max-width: 768px) {
+  .pageContainer {
+    padding: var(--space-4);
+  }
+
+  .formGrid.gridCols2 {
+    grid-template-columns: 1fr;
+  }
+
+  .frequencyGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .timePeriodsGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .formActions {
+    flex-direction: column;
+  }
+}

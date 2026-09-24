@@ -1,9 +1,12 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import Navbar from "../components/Navbar";
-import Sidebar from "../components/Sidebar";
-import Footer from "../components/Footer";
+import AppShell from "../components/AppShell";
+import Button from "../components/UI/Button";
+import Card from "../components/UI/Card";
+import Input from "../components/UI/Input";
+import Badge from "../components/UI/Badge";
 import API from "../services/api";
+import styles from "./AddMedicinePage.module.css";
 
 const FREQ = { once: 1, twice: 2, thrice: 3, four: 4 };
 const FREQ_LABELS = {
@@ -29,7 +32,6 @@ function getLocalToday() {
 
 function AddMedicinePage() {
   const navigate = useNavigate();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Auth guard
   useEffect(() => {
@@ -103,201 +105,301 @@ function AddMedicinePage() {
   };
 
   return (
-    <div className="dashboard-container">
-      {/* Sidebar navigation */}
-      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
-
-      {/* Main Layout content */}
-      <div className="main-layout-content">
-        <Navbar onToggleSidebar={() => setIsSidebarOpen(true)} />
-
-        <header className="page-header">
-          <button className="back-btn" onClick={() => navigate("/dashboard")}>←</button>
-          <h2 className="page-title">New Medication</h2>
-        </header>
-
-        <main className="form-container">
-          <div className="form-card">
-            {/* Error Banner */}
-            {error && (
-              <div style={{
-                background: "var(--danger-light)", color: "var(--danger)", padding: "14px 18px",
-                borderRadius: "var(--radius-sm)", marginBottom: "20px", fontSize: "14px",
-                border: "1px solid rgba(244, 63, 94, 0.15)", display: "flex", alignItems: "center", gap: "8px"
-              }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ flexShrink: 0 }}>
-                  <circle cx="12" cy="12" r="10"/>
-                  <line x1="12" y1="8" x2="12" y2="12"/>
-                  <line x1="12" y1="16" x2="12.01" y2="16"/>
-                </svg>
-                <span style={{ flex: 1, fontWeight: "600" }}>{error}</span>
-                <button onClick={() => setError("")} style={{
-                  background: "none", border: "none",
-                  color: "var(--danger)", cursor: "pointer", fontSize: "20px", lineHeight: 1
-                }}>×</button>
-              </div>
-            )}
-
-            <div className="form-group">
-              <label>Medicine Name *</label>
-              <input
-                placeholder="e.g., Glucotab"
-                value={name}
-                onChange={e => setName(e.target.value)}
-              />
-            </div>
-
-            <div className="form-group">
-              <label>Dosage *</label>
-              <input
-                placeholder="e.g., 500 mg / 1 pill"
-                value={dosage}
-                onChange={e => setDosage(e.target.value)}
-              />
-            </div>
-
-            {/* Date Range */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
-              <div className="form-group">
-                <label>Start Date *</label>
-                <input type="date" value={startDate} min={todayStr}
-                  onChange={e => setStartDate(e.target.value)} />
-              </div>
-              <div className="form-group">
-                <label>End Date (optional)</label>
-                <input type="date" value={endDate} min={startDate}
-                  onChange={e => setEndDate(e.target.value)} />
-              </div>
-            </div>
-
-            {/* Time Periods */}
-            <div className="form-group">
-              <label>When to Take (select all that apply)</label>
-              <div className="period-grid">
-                {TIME_PERIODS.map(({ key, label, icon, hint }) => (
-                  <button key={key} onClick={() => togglePeriod(key)} style={{
-                    padding: "14px 8px", border: "2px solid",
-                    borderColor: timePeriods.includes(key) ? "var(--primary)" : "#e2e8f0",
-                    borderRadius: "12px", cursor: "pointer", fontWeight: "700",
-                    display: "flex", flexDirection: "column", alignItems: "center", gap: "4px",
-                    background: timePeriods.includes(key) ? "var(--primary-light)" : "white",
-                    color: timePeriods.includes(key) ? "var(--primary)" : "var(--text-light)",
-                    transition: "var(--transition-smooth)", fontSize: "12px"
-                  }}>
-                    <span style={{ fontSize: "22px" }}>{icon}</span>
-                    <span style={{ color: "var(--text-main)", fontWeight: "800" }}>{label}</span>
-                    <span style={{ fontSize: "10px", opacity: 0.8 }}>{hint}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Frequency */}
-            <div className="form-group">
-              <label>Medication Frequency</label>
-              <div
-                style={{
-                  marginTop: "10px",
-                  display: "grid",
-                  gridTemplateColumns: "repeat(2, 1fr)",
-                  gap: "16px",
-                }}
-              >
-                {Object.entries(FREQ_LABELS).map(([key, { label, icon }]) => (
-                  <button
-                    key={key}
-                    onClick={() => handleFrequencyChange(key)}
-                    style={{
-                      padding: "20px 16px",
-                      fontSize: "14px",
-                      border: "none",
-                      borderRadius: "12px",
-                      cursor: "pointer",
-                      fontWeight: "800",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: "8px",
-                      transition: "var(--transition-smooth)",
-                      background:
-                        frequency === key
-                          ? "linear-gradient(135deg,var(--primary),var(--primary-hover))"
-                          : "#f1f5f9",
-                      color: frequency === key ? "white" : "var(--text-muted)",
-                      boxShadow: frequency === key ? "var(--shadow-sm)" : "none",
-                    }}
-                  >
-                    <span style={{ fontSize: "16px" }}>{icon}</span>
-                    <span>{label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Specific Times */}
-            <div className="form-group">
-              <label>Exact Alarm Times *</label>
-              {times.map((t, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "12px" }}>
-                  <span style={{
-                    background: "var(--primary-light)", color: "var(--primary)", fontWeight: "850",
-                    width: "32px", height: "32px", borderRadius: "50%",
-                    display: "flex", alignItems: "center", justifyItems: "center", justifyContent: "center", fontSize: "13px",
-                    border: "1px solid rgba(13, 148, 136, 0.15)"
-                  }}>{i + 1}</span>
-                  <input
-                    type="time"
-                    value={t}
-                    onChange={e => handleTimeChange(i, e.target.value)}
-                    style={{ flex: 1, marginBottom: 0 }}
-                  />
-                </div>
-              ))}
-            </div>
-
-            {/* Stock */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
-              <div className="form-group">
-                <label>Initial Stock (doses)</label>
-                <input type="number" min="0" value={stock}
-                  onChange={e => setStock(e.target.value)} placeholder="e.g., 30" />
-              </div>
-              <div className="form-group">
-                <label>Low Stock Warning Threshold</label>
-                <input type="number" min="0" value={refillAt}
-                  onChange={e => setRefillAt(e.target.value)} placeholder="e.g., 7" />
-              </div>
-            </div>
-
-            <div style={{
-              background: "var(--primary-light)", borderRadius: "12px", padding: "14px 18px",
-              marginBottom: "24px", fontSize: "13px", color: "var(--primary)", fontWeight: "700",
-              border: "1px solid rgba(13, 148, 136, 0.15)"
-            }}>
-              💡 Dynamic push alarms will fire at each specified exact alarm slot. Low stock alerts trigger once inventory dips below {refillAt} doses.
-            </div>
-
-            <div className="form-group">
-              <label>Notes (optional)</label>
-              <input
-                placeholder="e.g., Take after food, avoid dairy"
-                value={notes}
-                onChange={e => setNotes(e.target.value)}
-              />
-            </div>
-
-            <div className="form-actions">
-              <button className="btn-secondary" onClick={() => navigate("/dashboard")}>Cancel</button>
-              <button className="btn-primary" onClick={addMedicine} disabled={loading} style={{ margin: 0 }}>
-                {loading ? "Adding..." : "Add Medication Schedule"}
-              </button>
-            </div>
-
+    <AppShell>
+      <div className={styles.pageContainer}>
+        {/* Page Header */}
+        <div className={styles.pageHeader}>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => navigate("/dashboard")}
+            className={styles.backButton}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="m15 18-6-6 6-6"/>
+            </svg>
+            Back
+          </Button>
+          <div className={styles.pageHeaderContent}>
+            <h1 className={styles.pageTitle}>Add New Medication</h1>
+            <p className={styles.pageSubtitle}>Set up a medication schedule and tracking</p>
           </div>
-        </main>
-        <Footer />
+        </div>
+
+        <div className={styles.pageContent}>
+          <Card className={styles.medicationFormCard}>
+            <div className={styles.cardHeader}>
+              <h2 className={styles.cardTitle}>Medication Details</h2>
+              <p className={styles.cardSubtitle}>Enter your medication information and schedule</p>
+            </div>
+
+            <div className={styles.cardContent}>
+              {/* Error Alert */}
+              {error && (
+                <div className={`${styles.alert} ${styles.alertError}`} role="alert">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="m15 9-6 6"/>
+                    <path d="m9 9 6 6"/>
+                  </svg>
+                  <div className={styles.alertContent}>
+                    <p className={styles.alertTitle}>Error</p>
+                    <p className={styles.alertDescription}>{error}</p>
+                  </div>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => setError("")}
+                    className={styles.alertClose}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="m18 6-12 12"/>
+                      <path d="m6 6 12 12"/>
+                    </svg>
+                  </Button>
+                </div>
+              )}
+
+              <form className={styles.medicationForm} onSubmit={(e) => { e.preventDefault(); addMedicine(); }}>
+                <div className={styles.formSection}>
+                  <h3 className={styles.formSectionTitle}>Basic Information</h3>
+                  <div className={styles.formGrid}>
+                    <div className={styles.formField}>
+                      <Input
+                        label="Medicine Name"
+                        placeholder="e.g., Glucotab, Metformin"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        required
+                        icon={
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <rect width="7" height="18" x="3" y="3" rx="1"/>
+                            <rect width="7" height="7" x="14" y="3" rx="1"/>
+                            <rect width="7" height="7" x="14" y="14" rx="1"/>
+                          </svg>
+                        }
+                      />
+                    </div>
+
+                    <div className={styles.formField}>
+                      <Input
+                        label="Dosage"
+                        placeholder="e.g., 500mg, 1 tablet"
+                        value={dosage}
+                        onChange={(e) => setDosage(e.target.value)}
+                        required
+                        icon={
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M9 12h6"/>
+                            <path d="M12 9v6"/>
+                            <circle cx="12" cy="12" r="10"/>
+                          </svg>
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className={styles.formSection}>
+                  <h3 className={styles.formSectionTitle}>Schedule Period</h3>
+                  <div className={`${styles.formGrid} ${styles.gridCols2}`}>
+                    <div className={styles.formField}>
+                      <Input
+                        type="date"
+                        label="Start Date"
+                        value={startDate}
+                        onChange={(e) => setStartDate(e.target.value)}
+                        min={todayStr}
+                        required
+                      />
+                    </div>
+
+                    <div className={styles.formField}>
+                      <Input
+                        type="date"
+                        label="End Date (Optional)"
+                        value={endDate}
+                        onChange={(e) => setEndDate(e.target.value)}
+                        min={startDate}
+                        helpText="Leave empty for ongoing medication"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className={styles.formSection}>
+                  <h3 className={styles.formSectionTitle}>Time Periods</h3>
+                  <p className={styles.formSectionSubtitle}>Select when you typically take this medication</p>
+                  <div className={styles.timePeriodsGrid}>
+                    {TIME_PERIODS.map(({ key, label, icon, hint }) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => togglePeriod(key)}
+                        className={`${styles.timePeriodCard} ${timePeriods.includes(key) ? styles.selected : ''}`}
+                      >
+                        <span className={styles.timePeriodIcon}>{icon}</span>
+                        <span className={styles.timePeriodLabel}>{label}</span>
+                        <span className={styles.timePeriodHint}>{hint}</span>
+                        {timePeriods.includes(key) && (
+                          <div className={styles.timePeriodSelectedIndicator}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                              <polyline points="20,6 9,17 4,12"/>
+                            </svg>
+                          </div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className={styles.formSection}>
+                  <h3 className={styles.formSectionTitle}>Frequency</h3>
+                  <p className={styles.formSectionSubtitle}>How many times per day?</p>
+                  <div className={styles.frequencyGrid}>
+                    {Object.entries(FREQ_LABELS).map(([key, { label, icon }]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => handleFrequencyChange(key)}
+                        className={`${styles.frequencyCard} ${frequency === key ? styles.selected : ''}`}
+                      >
+                        <span className={styles.frequencyIcon}>{icon}</span>
+                        <span className={styles.frequencyLabel}>{label}</span>
+                        {frequency === key && (
+                          <div className={styles.frequencySelectedIndicator}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                              <polyline points="20,6 9,17 4,12"/>
+                            </svg>
+                          </div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className={styles.formSection}>
+                  <h3 className={styles.formSectionTitle}>Specific Times</h3>
+                  <p className={styles.formSectionSubtitle}>Set exact times for medication reminders</p>
+                  <div className={styles.timesList}>
+                    {times.map((time, index) => (
+                      <div key={index} className={styles.timeInputRow}>
+                        <Badge variant="neutral" size="sm">
+                          {index + 1}
+                        </Badge>
+                        <Input
+                          type="time"
+                          value={time}
+                          onChange={(e) => handleTimeChange(index, e.target.value)}
+                          placeholder="Set time"
+                          required
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className={styles.formSection}>
+                  <h3 className={styles.formSectionTitle}>Stock Management</h3>
+                  <div className={`${styles.formGrid} ${styles.gridCols2}`}>
+                    <div className={styles.formField}>
+                      <Input
+                        type="number"
+                        label="Initial Stock"
+                        placeholder="30"
+                        value={stock}
+                        onChange={(e) => setStock(e.target.value)}
+                        min="0"
+                        helpText="Number of doses you have"
+                        icon={
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M3 9h18v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9Z"/>
+                            <path d="m3 9 2.45-4.9A2 2 0 0 1 7.24 3h9.52a2 2 0 0 1 1.8 1.1L21 9"/>
+                            <path d="M12 3v6"/>
+                          </svg>
+                        }
+                      />
+                    </div>
+
+                    <div className={styles.formField}>
+                      <Input
+                        type="number"
+                        label="Refill Alert Threshold"
+                        placeholder="7"
+                        value={refillAt}
+                        onChange={(e) => setRefillAt(e.target.value)}
+                        min="0"
+                        helpText="Alert when stock reaches this level"
+                        icon={
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <triangle cx="12" cy="12" r="10"/>
+                            <path d="m9 12 2 2 4-4"/>
+                          </svg>
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className={styles.formSection}>
+                  <div className={styles.formField}>
+                    <Input
+                      label="Notes (Optional)"
+                      placeholder="e.g., Take with food, avoid dairy products"
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      helpText="Any special instructions or reminders"
+                      icon={
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                          <polyline points="14,2 14,8 20,8"/>
+                          <line x1="16" y1="13" x2="8" y2="13"/>
+                          <line x1="16" y1="17" x2="8" y2="17"/>
+                          <polyline points="10,9 9,9 8,9"/>
+                        </svg>
+                      }
+                    />
+                  </div>
+                </div>
+
+                <div className={styles.infoCard}>
+                  <div className={styles.infoCardIcon}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="12" cy="12" r="10"/>
+                      <path d="m9 12 2 2 4-4"/>
+                    </svg>
+                  </div>
+                  <div className={styles.infoCardContent}>
+                    <h4 className={styles.infoCardTitle}>Automatic Reminders</h4>
+                    <p className={styles.infoCardText}>
+                      Push notifications will be sent at each scheduled time. You'll also receive low stock alerts 
+                      when your medication count drops to {refillAt} doses.
+                    </p>
+                  </div>
+                </div>
+
+                <div className={styles.formActions}>
+                  <Button 
+                    type="button" 
+                    variant="secondary" 
+                    onClick={() => navigate("/dashboard")}
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    type="submit" 
+                    variant="primary" 
+                    loading={loading}
+                  >
+                    {loading ? "Adding Medication..." : "Add Medication Schedule"}
+                  </Button>
+                </div>
+              </form>
+            </div>
+          </Card>
+        </div>
       </div>
-    </div>
+    </AppShell>
   );
 }
 
