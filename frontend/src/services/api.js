@@ -1,24 +1,27 @@
 import axios from "axios";
 
+// Determine the API base URL
+// Priority: REACT_APP_API_URL env var → runtime hostname check → fallback to Render
 const getBaseURL = () => {
+  // 1. Explicit env var (set in Vercel dashboard) always wins
   if (process.env.REACT_APP_API_URL) {
-    const url = process.env.REACT_APP_API_URL;
-    // Normalize: strip trailing slash, ensure it ends with /api
-    const base = url.replace(/\/+$/, "");
+    const base = process.env.REACT_APP_API_URL.replace(/\/+$/, "");
     return base.endsWith("/api") ? base : `${base}/api`;
   }
-  const hostname = window.location.hostname;
-  // On localhost: connect to local backend normally
+  // 2. Runtime check — cannot be tree-shaken since window is evaluated at runtime
+  const hostname = typeof window !== "undefined" ? window.location.hostname : "";
   if (hostname === "localhost" || hostname === "127.0.0.1") {
     return "http://localhost:5000/api";
   }
-  // On production: default to deployed Render backend if REACT_APP_API_URL is unset
+  // 3. Production fallback — always goes to Render backend
   return "https://medi-time-2peh.onrender.com/api";
 };
 
 const API = axios.create({
-  baseURL: getBaseURL()
+  baseURL: getBaseURL(),
+  timeout: 15000
 });
+
 
 // Attach JWT token to every request
 API.interceptors.request.use((req) => {
