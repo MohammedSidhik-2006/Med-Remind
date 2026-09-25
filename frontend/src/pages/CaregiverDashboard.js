@@ -28,11 +28,12 @@ function CaregiverDashboard() {
     setError(null);
     try {
       const res = await API.get("/caregiver/my-patients");
-      setPatients(res.data);
-      if (res.data.length > 0) {
-        // Only auto-select if the populate was successful and _id is valid
-        const firstId = res.data[0].patientId?._id;
-        if (firstId) setSelectedPatientId(firstId);
+      const valid = Array.isArray(res.data) ? res.data.filter(p => p.patientId && p.patientId._id) : [];
+      setPatients(valid);
+      if (valid.length > 0) {
+        setSelectedPatientId(prev => (prev && valid.some(p => p.patientId._id === prev)) ? prev : valid[0].patientId._id);
+      } else {
+        setSelectedPatientId(null);
       }
     } catch (err) {
       console.error("Error loading patients:", err);

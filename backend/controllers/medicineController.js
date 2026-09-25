@@ -304,8 +304,16 @@ exports.updateStock = async (req, res) => {
     const med = await Medicine.findOne({ _id: req.params.id, userId: req.user.id });
     if (!med) return res.status(404).json({ message: "Medicine not found" });
 
-    const isLow = stock <= med.refillAt;
-    const updated = await Medicine.findByIdAndUpdate(req.params.id, { $set: { stock, refillNotified: isLow } }, { returnDocument: "after" });
+    const refillThreshold = req.body.refillAt !== undefined && !isNaN(parseInt(req.body.refillAt))
+      ? Math.max(0, parseInt(req.body.refillAt))
+      : (med.refillAt !== undefined ? med.refillAt : 7);
+
+    const isLow = stock <= refillThreshold;
+    const updated = await Medicine.findByIdAndUpdate(
+      req.params.id, 
+      { $set: { stock, refillAt: refillThreshold, refillNotified: isLow } }, 
+      { returnDocument: "after" }
+    );
 
     if (isLow) {
       sendPushToUser(med.userId, {

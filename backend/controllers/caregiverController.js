@@ -127,7 +127,8 @@ exports.getMyPatients = async (req, res) => {
   try {
     const relations = await CaregiverRelation.find({ caregiverId: req.user.id })
       .populate("patientId", "name email avatar");
-    res.json(relations);
+    const valid = relations.filter(r => r.patientId != null);
+    res.json(valid);
   } catch (error) {
     console.error("getMyPatients error:", error.message);
     res.status(500).json({ message: "Server error." });

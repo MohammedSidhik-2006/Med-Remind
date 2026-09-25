@@ -211,8 +211,9 @@ const sendResetEmail = async (email, code) => {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS
       },
-      connectionTimeout: 5000,
-      socketTimeout: 5000
+      connectionTimeout: 8000,
+      greetingTimeout: 8000,
+      socketTimeout: 8000
     });
   } else if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
     transporter = nodemailer.createTransport({
@@ -220,7 +221,10 @@ const sendResetEmail = async (email, code) => {
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS
-      }
+      },
+      connectionTimeout: 8000,
+      greetingTimeout: 8000,
+      socketTimeout: 8000
     });
   } else {
     try {
@@ -232,7 +236,10 @@ const sendResetEmail = async (email, code) => {
         auth: {
           user: testAccount.user,
           pass: testAccount.pass
-        }
+        },
+        connectionTimeout: 8000,
+        greetingTimeout: 8000,
+        socketTimeout: 8000
       });
     } catch (e) {
       console.warn("Failed to initialize ethereal test mail transporter:", e.message);

@@ -13,3 +13,14 @@ root.render(
     </ErrorBoundary>
   </React.StrictMode>
 );
+
+// Register service worker for offline support and background sync
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").then((reg) => {
+      console.log("Service Worker registered with scope:", reg.scope);
+    }).catch((err) => {
+      console.warn("Service Worker registration failed:", err.message);
+    });
+  });
+}

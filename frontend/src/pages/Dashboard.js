@@ -68,6 +68,11 @@ function Dashboard() {
       setStreak(reportsData.streak || 0);
       setAdherenceRate(reportsData.overallAdherence || 0);
 
+      // Cache medicines locally for offline viewing
+      try {
+        localStorage.setItem("medremind_cached_medicines", JSON.stringify(medicinesData));
+      } catch (storageErr) {}
+
       // Calculate today's stats
       const today = new Date().toISOString().split('T')[0];
       const activeMedicines = medicinesData.filter(med => {
@@ -108,7 +113,18 @@ function Dashboard() {
 
     } catch (error) {
       console.error("Error fetching dashboard data:", error);
-      addToast("Failed to load dashboard data", "error");
+      try {
+        const cached = localStorage.getItem("medremind_cached_medicines");
+        if (cached) {
+          const cachedMeds = JSON.parse(cached);
+          setMedicines(cachedMeds);
+          addToast("Operating offline — displaying cached medication schedules", "info");
+        } else {
+          addToast("Failed to load dashboard data", "error");
+        }
+      } catch (cacheErr) {
+        addToast("Failed to load dashboard data", "error");
+      }
     } finally {
       setLoading(false);
     }
