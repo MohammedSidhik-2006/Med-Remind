@@ -358,7 +358,7 @@ function Dashboard() {
                       {nextMed.name}
                     </h3>
                     <p className="next-dose-details text-secondary">
-                      {nextMed.dosage} â€¢ {formatTime(nextMed.scheduledTime)}
+                      {nextMed.dosage} • {formatTime(nextMed.scheduledTime)}
                     </p>
                   </div>
                 </div>
@@ -379,9 +379,9 @@ function Dashboard() {
                 
                 <div className="progress-breakdown mt-4">
                   <div className="flex justify-between text-sm">
-                    <span className="text-success">âœ“ Taken: {stats.taken}</span>
+                    <span className="text-success">✓ Taken: {stats.taken}</span>
                     <span className="text-warning">â³ Pending: {stats.pending}</span>
-                    <span className="text-danger">âœ— Missed: {stats.missed}</span>
+                    <span className="text-danger">✗ Missed: {stats.missed}</span>
                   </div>
                 </div>
               </Card.Body>
@@ -407,7 +407,7 @@ function Dashboard() {
                 </div>
               </Card.Header>
               <Card.Body>
-                <MedicineList medicines={medicines} refreshMedicines={() => fetchDashboardData(false)} />
+                <MedicineList medicines={medicines} setMedicines={setMedicines} refreshMedicines={() => fetchDashboardData(false)} navigate={navigate} />
               </Card.Body>
             </Card>
           </div>
