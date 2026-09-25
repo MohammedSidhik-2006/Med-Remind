@@ -6,6 +6,7 @@ import LoadingSpinner from "./components/LoadingSpinner";
 
 // Import design system
 import "./styles/design-system.css";
+import "./styles/components.css";
 
 // Lazy-loaded page components for route-level code splitting & bundle size optimization
 const Login = lazy(() => import("./pages/Login"));

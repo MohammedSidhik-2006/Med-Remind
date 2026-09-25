@@ -75,20 +75,6 @@ function Button({
       {icon && iconPosition === "right" && !loading && icon}
       {loading && iconPosition === "right" && <LoadingSpinner />}
 
-      <style jsx>{`
-        .w-full {
-          width: 100%;
-        }
-
-        .animate-spin {
-          animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
     </button>
   );
 }

@@ -32,10 +32,12 @@ app.use((req, res, next) => {
   next();
 });
 
-const corsOrigin = process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : ['http://localhost:3000'];
+const rawOrigins = process.env.CORS_ORIGIN || "http://localhost:3000,https://med-remind-green.vercel.app";
+const corsOrigins = rawOrigins.split(',').map(s => s.trim().replace(/\/+$/, '')).filter(Boolean);
 app.use(cors({
   origin: function(origin, callback) {
-    if (!origin || corsOrigin.includes(origin) || corsOrigin.includes('*')) {
+    const normalizedOrigin = origin ? origin.replace(/\/+$/, '') : '';
+    if (!origin || corsOrigins.includes(normalizedOrigin) || corsOrigins.includes('*')) {
       callback(null, true);
     } else {
       console.error(`CORS blocked origin: ${origin}`);

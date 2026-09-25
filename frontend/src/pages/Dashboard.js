@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import AppShell from "../components/AppShell";
-import { Card, Button, Badge, ProgressBar } from "../components/UI";
+import { Card, Button, ProgressBar } from "../components/UI";
 import { SkeletonDashboard } from "../components/Skeleton";
 import API from "../services/api";
 import { setupPushNotifications } from "../services/notifications";
 import { useToast } from "../components/Toast";
 import MedicineList from "../components/MedicineList";
+import "./Dashboard.css";
 
 /**
  * Modern Dashboard - The heart of MedRemind
@@ -49,7 +50,6 @@ function Dashboard() {
   };
 
   const user = getUserInfo();
-  const userName = user?.name?.split(" ")[0] || "there";
 
   // Fetch dashboard data
   const fetchDashboardData = useCallback(async (showLoading = true) => {
@@ -83,15 +83,15 @@ function Dashboard() {
 
       activeMedicines.forEach(med => {
         const times = med.times?.length > 0 ? med.times : [med.time];
-        times.forEach(() => {
+        times.forEach((slotTime) => {
           totalScheduled++;
-          const todayLog = med.todayLogs?.find(log => 
-            log.date === today || log.scheduledTime
+          const slotLog = med.todayLogs?.find(log => 
+            log.scheduledTime === slotTime
           );
           
-          if (todayLog) {
-            if (todayLog.status === "taken") totalTaken++;
-            else if (todayLog.status === "missed") totalMissed++;
+          if (slotLog) {
+            if (slotLog.status === "taken") totalTaken++;
+            else if (slotLog.status === "missed") totalMissed++;
             else totalPending++;
           } else {
             totalPending++;
@@ -187,13 +187,12 @@ function Dashboard() {
   // Calculate daily progress percentage
   const dailyProgress = stats.total > 0 ? (stats.taken / stats.total) * 100 : 0;
 
-  // Get greeting based on time
-  const getGreeting = () => {
+  const greeting = (() => {
     const hour = new Date().getHours();
     if (hour < 12) return "Good morning";
     if (hour < 17) return "Good afternoon";
     return "Good evening";
-  };
+  })();
 
   if (loading) {
     return (
@@ -250,7 +249,7 @@ function Dashboard() {
         {/* Welcome section */}
         <div className="welcome-section mb-8">
           <h1 className="text-3xl font-bold text-primary mb-2">
-            {getGreeting()}, {userName}! 👋
+            {greeting}, {user?.name?.split(" ")[0] || "there"}! 
           </h1>
           <p className="text-lg text-secondary">
             Here's your medication plan for today
@@ -343,7 +342,7 @@ function Dashboard() {
                       {nextMed.name}
                     </h3>
                     <p className="next-dose-details text-secondary">
-                      {nextMed.dosage} • {formatTime(nextMed.scheduledTime)}
+                      {nextMed.dosage} â€¢ {formatTime(nextMed.scheduledTime)}
                     </p>
                   </div>
                 </div>
@@ -364,9 +363,9 @@ function Dashboard() {
                 
                 <div className="progress-breakdown mt-4">
                   <div className="flex justify-between text-sm">
-                    <span className="text-success">✓ Taken: {stats.taken}</span>
-                    <span className="text-warning">⏳ Pending: {stats.pending}</span>
-                    <span className="text-danger">✗ Missed: {stats.missed}</span>
+                    <span className="text-success">âœ“ Taken: {stats.taken}</span>
+                    <span className="text-warning">â³ Pending: {stats.pending}</span>
+                    <span className="text-danger">âœ— Missed: {stats.missed}</span>
                   </div>
                 </div>
               </Card.Body>
@@ -481,128 +480,7 @@ function Dashboard() {
         </div>
       </div>
 
-      <style jsx>{`
-        .dashboard-container {
-          max-width: 1200px;
-          margin: 0 auto;
-          padding: var(--space-8) var(--space-6);
-        }
-
-        .push-prompt-banner {
-          background: linear-gradient(135deg, var(--primary-light), var(--primary-soft));
-          border: 1px solid var(--primary-soft);
-        }
-
-        .notification-icon {
-          width: 48px;
-          height: 48px;
-          border-radius: var(--radius-full);
-          background: var(--primary);
-          color: var(--white);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .stats-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-          gap: var(--space-4);
-        }
-
-        .stat-card {
-          padding: var(--space-5);
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-        }
-
-        .stat-content {
-          flex: 1;
-        }
-
-        .stat-value {
-          line-height: 1;
-          margin-bottom: var(--space-1);
-        }
-
-        .stat-icon {
-          width: 48px;
-          height: 48px;
-          border-radius: var(--radius-md);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          flex-shrink: 0;
-        }
-
-        .main-grid {
-          display: grid;
-          grid-template-columns: 2fr 1fr;
-          gap: var(--space-8);
-        }
-
-        .next-dose-card {
-          background: linear-gradient(135deg, var(--warning-light), var(--warning-soft));
-          border: 1px solid var(--warning-soft);
-        }
-
-        .next-dose-content {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          gap: var(--space-4);
-        }
-
-        .next-dose-actions {
-          display: flex;
-          gap: var(--space-2);
-          flex-shrink: 0;
-        }
-
-        .quick-actions {
-          display: flex;
-          flex-direction: column;
-          gap: var(--space-3);
-        }
-
-        .adherence-summary {
-          display: flex;
-          justify-content: space-around;
-          text-align: center;
-        }
-
-        .adherence-stat {
-          display: flex;
-          flex-direction: column;
-          gap: var(--space-1);
-        }
-
-        /* Mobile responsive */
-        @media (max-width: 768px) {
-          .dashboard-container {
-            padding: var(--space-6) var(--space-4);
-          }
-
-          .main-grid {
-            grid-template-columns: 1fr;
-            gap: var(--space-6);
-          }
-
-          .stats-grid {
-            grid-template-columns: repeat(2, 1fr);
-          }
-
-          .next-dose-content {
-            flex-direction: column;
-            align-items: stretch;
-          }
-
-          .next-dose-actions {
-            justify-content: stretch;
-          }
-        }
-      `}</style>
+      
     </AppShell>
   );
 }
@@ -621,55 +499,7 @@ function QuickActionItem({ icon, title, description, onClick }) {
         <div className="quick-action-description">{description}</div>
       </div>
 
-      <style jsx>{`
-        .quick-action-item {
-          display: flex;
-          align-items: center;
-          gap: var(--space-3);
-          padding: var(--space-3);
-          border: none;
-          background: transparent;
-          border-radius: var(--radius-md);
-          cursor: pointer;
-          transition: all var(--duration-fast) var(--ease);
-          text-align: left;
-          width: 100%;
-        }
-
-        .quick-action-item:hover {
-          background: var(--bg-subtle);
-        }
-
-        .quick-action-icon {
-          width: 40px;
-          height: 40px;
-          border-radius: var(--radius-md);
-          background: var(--primary-light);
-          color: var(--primary);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          flex-shrink: 0;
-        }
-
-        .quick-action-content {
-          flex: 1;
-          min-width: 0;
-        }
-
-        .quick-action-title {
-          font-size: 14px;
-          font-weight: 600;
-          color: var(--text-primary);
-          margin-bottom: var(--space-1);
-        }
-
-        .quick-action-description {
-          font-size: 12px;
-          color: var(--text-muted);
-          line-height: 1.4;
-        }
-      `}</style>
+      
     </button>
   );
 }
@@ -686,3 +516,5 @@ function formatTime(timeStr) {
 }
 
 export default Dashboard;
+
+

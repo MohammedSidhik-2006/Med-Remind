@@ -14,7 +14,7 @@ function Badge({
   const variantClasses = {
     neutral: "badge-neutral",
     success: "badge-success",
-    warning: "badge-warning", 
+    warning: "badge-warning",
     danger: "badge-danger",
     info: "badge-info"
   };
@@ -35,57 +35,6 @@ function Badge({
   return (
     <span className={classes} {...props}>
       {children}
-      
-      <style jsx>{`
-        .badge-sm {
-          font-size: 10px;
-          padding: var(--space-1) var(--space-2);
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
-          display: inline-flex;
-          align-items: center;
-        }
-
-        .badge-lg {
-          font-size: 14px;
-          padding: var(--space-2) var(--space-4);
-          font-weight: 600;
-          text-transform: uppercase;
-          letter-spacing: 0.025em;
-          display: inline-flex;
-          align-items: center;
-        }
-
-        .badge-rounded {
-          border-radius: var(--radius-full);
-        }
-
-        /* Medical status badges */
-        .badge-taken {
-          background: var(--success-light);
-          color: var(--success);
-          border: 1px solid var(--success-soft);
-        }
-
-        .badge-pending {
-          background: var(--warning-light);
-          color: var(--warning);
-          border: 1px solid var(--warning-soft);
-        }
-
-        .badge-missed {
-          background: var(--danger-light);
-          color: var(--danger);
-          border: 1px solid var(--danger-soft);
-        }
-
-        .badge-scheduled {
-          background: var(--info-light);
-          color: var(--info);
-          border: 1px solid var(--info-soft);
-        }
-      `}</style>
     </span>
   );
 }
@@ -93,8 +42,8 @@ function Badge({
 // Status-specific badge shortcuts
 Badge.Success = (props) => <Badge variant="success" {...props} />;
 Badge.Warning = (props) => <Badge variant="warning" {...props} />;
-Badge.Danger = (props) => <Badge variant="danger" {...props} />;
-Badge.Info = (props) => <Badge variant="info" {...props} />;
+Badge.Danger  = (props) => <Badge variant="danger"  {...props} />;
+Badge.Info    = (props) => <Badge variant="info"    {...props} />;
 
 // Medical status badges
 Badge.Taken = (props) => (

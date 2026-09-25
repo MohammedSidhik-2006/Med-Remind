@@ -15,39 +15,6 @@ export function Skeleton({ className = "", width, height, rounded = false }) {
       className={`skeleton ${rounded ? 'skeleton-rounded' : ''} ${className}`}
       style={style}
     >
-      <style jsx>{`
-        .skeleton {
-          background: linear-gradient(
-            90deg,
-            var(--bg-muted) 25%,
-            var(--bg-subtle) 50%,
-            var(--bg-muted) 75%
-          );
-          background-size: 200% 100%;
-          animation: shimmer 1.5s ease-in-out infinite;
-          border-radius: var(--radius-sm);
-        }
-
-        .skeleton-rounded {
-          border-radius: var(--radius-full);
-        }
-
-        @keyframes shimmer {
-          0% {
-            background-position: 200% 0;
-          }
-          100% {
-            background-position: -200% 0;
-          }
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-          .skeleton {
-            animation: none;
-            background: var(--bg-muted);
-          }
-        }
-      `}</style>
     </div>
   );
 }
@@ -64,18 +31,6 @@ export function SkeletonText({ lines = 1, className = "" }) {
           className="skeleton-text-line"
         />
       ))}
-      
-      <style jsx>{`
-        .skeleton-text {
-          display: flex;
-          flex-direction: column;
-          gap: var(--space-2);
-        }
-
-        .skeleton-text :global(.skeleton-text-line) {
-          height: 16px;
-        }
-      `}</style>
     </div>
   );
 }
@@ -114,34 +69,6 @@ export function SkeletonCard({ showAvatar = false, lines = 3 }) {
       <div className="skeleton-card-content">
         <SkeletonText lines={lines} />
       </div>
-
-      <style jsx>{`
-        .skeleton-card {
-          padding: var(--space-6);
-          background: var(--bg-card);
-          border: 1px solid var(--border-light);
-          border-radius: var(--radius-lg);
-          box-shadow: var(--shadow-sm);
-        }
-
-        .skeleton-card-header {
-          display: flex;
-          align-items: center;
-          gap: var(--space-3);
-          margin-bottom: var(--space-4);
-        }
-
-        .skeleton-card-title {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          gap: var(--space-2);
-        }
-
-        .skeleton-card-content {
-          margin-top: var(--space-4);
-        }
-      `}</style>
     </div>
   );
 }
@@ -164,31 +91,6 @@ export function SkeletonMedicineCard() {
         <Skeleton height="32px" width="80px" />
         <Skeleton height="32px" width="60px" />
       </div>
-
-      <style jsx>{`
-        .skeleton-medicine-card {
-          display: flex;
-          align-items: center;
-          gap: var(--space-4);
-          padding: var(--space-4);
-          background: var(--bg-card);
-          border: 1px solid var(--border-light);
-          border-radius: var(--radius-md);
-          box-shadow: var(--shadow-sm);
-        }
-
-        .skeleton-medicine-info {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          gap: var(--space-2);
-        }
-
-        .skeleton-medicine-actions {
-          display: flex;
-          gap: var(--space-2);
-        }
-      `}</style>
     </div>
   );
 }
@@ -222,55 +124,6 @@ export function SkeletonDashboard() {
           <SkeletonMedicineCard key={i} />
         ))}
       </div>
-
-      <style jsx>{`
-        .skeleton-dashboard {
-          max-width: 1200px;
-          margin: 0 auto;
-          padding: var(--space-8) var(--space-6);
-          display: flex;
-          flex-direction: column;
-          gap: var(--space-8);
-        }
-
-        .skeleton-dashboard-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-        }
-
-        .skeleton-dashboard-title {
-          display: flex;
-          flex-direction: column;
-          gap: var(--space-2);
-        }
-
-        .skeleton-stats-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-          gap: var(--space-4);
-        }
-
-        .skeleton-stat-card {
-          padding: var(--space-5);
-          background: var(--bg-card);
-          border: 1px solid var(--border-light);
-          border-radius: var(--radius-lg);
-          display: flex;
-          flex-direction: column;
-          gap: var(--space-2);
-        }
-
-        .skeleton-medicine-list {
-          display: flex;
-          flex-direction: column;
-          gap: var(--space-4);
-        }
-
-        .skeleton-medicine-list :global(.skeleton-section-title) {
-          margin-bottom: var(--space-2);
-        }
-      `}</style>
     </div>
   );
 }
@@ -298,37 +151,6 @@ export function SkeletonList({ rows = 5, showHeader = true }) {
           </div>
         ))}
       </div>
-
-      <style jsx>{`
-        .skeleton-list {
-          background: var(--bg-card);
-          border: 1px solid var(--border-light);
-          border-radius: var(--radius-lg);
-          overflow: hidden;
-        }
-
-        .skeleton-list-header,
-        .skeleton-list-row {
-          display: grid;
-          grid-template-columns: 1fr 1.5fr 1fr 1.2fr;
-          gap: var(--space-4);
-          padding: var(--space-4);
-          align-items: center;
-        }
-
-        .skeleton-list-header {
-          background: var(--bg-subtle);
-          border-bottom: 1px solid var(--border-light);
-        }
-
-        .skeleton-list-row {
-          border-bottom: 1px solid var(--border-light);
-        }
-
-        .skeleton-list-row:last-child {
-          border-bottom: none;
-        }
-      `}</style>
     </div>
   );
 }

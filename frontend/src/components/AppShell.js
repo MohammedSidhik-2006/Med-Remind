@@ -58,41 +58,6 @@ function AppShell({ children, title, subtitle, showBackButton, onBack }) {
         </main>
       </div>
 
-      <style jsx>{`
-        .app-shell {
-          display: flex;
-          min-height: 100vh;
-          background: var(--bg-page);
-        }
-
-        .app-shell-overlay {
-          position: fixed;
-          inset: 0;
-          background: rgba(0, 0, 0, 0.5);
-          z-index: 40;
-          backdrop-filter: blur(2px);
-        }
-
-        .app-shell-content {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          min-width: 0;
-          transition: margin-left var(--duration-slow) var(--ease);
-        }
-
-        .app-shell-main {
-          flex: 1;
-          overflow-x: hidden;
-        }
-
-        /* Desktop sidebar spacing */
-        @media (min-width: 768px) {
-          .app-shell-content {
-            margin-left: 280px;
-          }
-        }
-      `}</style>
     </div>
   );
 }

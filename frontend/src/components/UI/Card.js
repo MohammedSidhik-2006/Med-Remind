@@ -1,4 +1,5 @@
 import React from "react";
+import "./Card.css";
 
 /**
  * Modern Card component for consistent layouts
@@ -36,18 +37,6 @@ function Card({
   return (
     <div className={classes} {...props}>
       {children}
-      
-      <style jsx>{`
-        .card-hover {
-          transition: all var(--duration-normal) var(--ease);
-          cursor: pointer;
-        }
-
-        .card-hover:hover {
-          transform: translateY(-2px);
-          box-shadow: var(--shadow-lg);
-        }
-      `}</style>
     </div>
   );
 }

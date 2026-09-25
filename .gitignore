@@ -27,3 +27,6 @@ Thumbs.db
 
 # Coverage
 coverage/
+
+# IDE / Tool scratch
+.kiro/
