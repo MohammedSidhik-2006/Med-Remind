@@ -5,16 +5,15 @@ import axios from "axios";
 const getBaseURL = () => {
   // 1. Explicit env var (set in Vercel dashboard) always wins
   if (process.env.REACT_APP_API_URL) {
-    const base = process.env.REACT_APP_API_URL.replace(/\/+$/, "");
-    return base.endsWith("/api") ? base : `${base}/api`;
+    return process.env.REACT_APP_API_URL.replace(/\/+$/, "");
   }
   // 2. Runtime check — cannot be tree-shaken since window is evaluated at runtime
   const hostname = typeof window !== "undefined" ? window.location.hostname : "";
   if (hostname === "localhost" || hostname === "127.0.0.1") {
-    return "http://localhost:5000/api";
+    return "http://localhost:5000";
   }
   // 3. Production fallback — always goes to Render backend
-  return "https://medi-time-2peh.onrender.com/api";
+  return "https://medi-time-2peh.onrender.com";
 };
 
 const API = axios.create({

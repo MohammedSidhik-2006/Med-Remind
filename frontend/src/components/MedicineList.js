@@ -211,15 +211,41 @@ function MedicineList({ medicines, setMedicines, loading, refreshMedicines, navi
     setConfirmTarget(null);
 
     try {
-      await API.patch(`/medicine/taken/${targetId}`, { scheduledTime: slotTime });
-      refreshMedicines();
+      const response = await API.patch(`/medicine/taken/${targetId}`, { scheduledTime: slotTime });
+      
+      // Backend returns success with updated medicine data
+      // Update the medicine in state with the authoritative backend data
+      if (response.data) {
+        setMedicines(prev => prev.map(m => 
+          m._id === targetId ? response.data : m
+        ));
+      }
+      
+      // Await refresh to ensure Dashboard stats update correctly
+      await refreshMedicines();
+      
+      // Show success message only if not an idempotent duplicate
+      if (!response.data.alreadyTaken) {
+        // Success - dose recorded (no toast shown to keep UI clean, but you can add one here if needed)
+      }
     } catch (err) {
+      // Only show error if the backend actually failed
       setMedicines(backup);
-      setInfoModal({ 
-        title: "Confirm Failed", 
-        message: err.response?.data?.message || "Status update blocked. Please try again.", 
-        icon: "Warning" 
-      });
+      
+      // Check if this is a network/timeout error vs actual backend failure
+      if (err.code === 'ECONNABORTED' || err.message === 'Network Error') {
+        setInfoModal({ 
+          title: "Connection Issue", 
+          message: "Network timeout. Your dose may have been recorded. Please refresh to check.", 
+          icon: "Warning" 
+        });
+      } else {
+        setInfoModal({ 
+          title: "Failed to Record Dose", 
+          message: err.response?.data?.message || "Could not record dose. Please try again.", 
+          icon: "Warning" 
+        });
+      }
     } finally {
       setProcessingKey(null);
     }

@@ -6,7 +6,7 @@ import Header from "./Header";
  * AppShell - Modern application layout container
  * Provides consistent layout structure across all authenticated pages
  */
-function AppShell({ children, title, subtitle, showBackButton, onBack }) {
+function AppShell({ children, title, subtitle, showBackButton, onBack, notificationRefreshTrigger }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
@@ -50,6 +50,7 @@ function AppShell({ children, title, subtitle, showBackButton, onBack }) {
           subtitle={subtitle}
           showBackButton={showBackButton}
           onBack={onBack}
+          refreshTrigger={notificationRefreshTrigger}
         />
 
         {/* Page content */}

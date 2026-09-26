@@ -144,7 +144,20 @@ exports.markTaken = async (req, res) => {
       const takenLogsCount = await DoseLog.countDocuments({ medicineId: medicine._id, date: today, status: "taken" });
       const isFullyTaken   = takenLogsCount >= allTimes.length;
       if (medicine.taken !== isFullyTaken) await Medicine.findByIdAndUpdate(medicine._id, { taken: isFullyTaken });
-      return res.json(medicine);
+      
+      // Fetch the updated medicine with latest todayLogs for accurate frontend state
+      const freshMedicine = await Medicine.findById(medicine._id).lean();
+      const todayLogs = await DoseLog.find({ medicineId: medicine._id, date: today }).lean();
+      const user = await User.findById(medicine.userId).select("maxMissedThreshold").lean();
+      const maxMissedThreshold = user?.maxMissedThreshold || 3;
+      
+      return res.json({ 
+        ...freshMedicine, 
+        takenTodayCount: takenLogsCount,
+        maxMissedThreshold,
+        todayLogs,
+        alreadyTaken: true // Signal to frontend this was idempotent
+      });
     }
 
     // FIX FOR BUG-001-RACE: Create DoseLog first (atomic via unique index),
@@ -173,8 +186,19 @@ exports.markTaken = async (req, res) => {
     } catch (err) {
       if (err.code === 11000) {
         console.warn(`Idempotent collision caught for medicine ${medicine._id} scheduledTime ${scheduledTime}`);
-        const freshMedicine = await Medicine.findById(medicine._id);
-        return res.json(freshMedicine || medicine);
+        const freshMedicine = await Medicine.findById(medicine._id).lean();
+        const takenLogsCount = await DoseLog.countDocuments({ medicineId: medicine._id, date: today, status: "taken" });
+        const todayLogs = await DoseLog.find({ medicineId: medicine._id, date: today }).lean();
+        const user = await User.findById(medicine.userId).select("maxMissedThreshold").lean();
+        const maxMissedThreshold = user?.maxMissedThreshold || 3;
+        
+        return res.json({ 
+          ...freshMedicine, 
+          takenTodayCount: takenLogsCount,
+          maxMissedThreshold,
+          todayLogs,
+          alreadyTaken: true // Signal to frontend this was idempotent
+        });
       }
       throw err;
     }
@@ -236,7 +260,17 @@ exports.markTaken = async (req, res) => {
       }).catch(e => console.error("Error sending immediate refill alert:", e.message));
     }
 
-    res.json(updated);
+    // Fetch todayLogs to return complete state to frontend
+    const todayLogs = await DoseLog.find({ medicineId: medicine._id, date: today }).lean();
+    const user = await User.findById(medicine.userId).select("maxMissedThreshold").lean();
+    const maxMissedThreshold = user?.maxMissedThreshold || 3;
+
+    res.json({ 
+      ...updated.toObject(), 
+      takenTodayCount: takenLogsCount,
+      maxMissedThreshold,
+      todayLogs
+    });
   } catch (error) {
     console.error("markTaken:", error.message);
     res.status(500).json({ message: "Server error" });

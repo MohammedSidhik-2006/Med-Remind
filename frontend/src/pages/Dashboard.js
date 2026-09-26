@@ -23,6 +23,7 @@ function Dashboard() {
   const [stats, setStats] = useState({ taken: 0, pending: 0, missed: 0, total: 0 });
   const [adherenceRate, setAdherenceRate] = useState(0);
   const [streak, setStreak] = useState(0);
+  const [notificationRefreshTrigger, setNotificationRefreshTrigger] = useState(0);
   
   // Push notification state  
   const [showPushPrompt, setShowPushPrompt] = useState(false);
@@ -73,7 +74,7 @@ function Dashboard() {
         localStorage.setItem("medremind_cached_medicines", JSON.stringify(medicinesData));
       } catch (storageErr) {}
 
-      // Calculate today's stats
+      // Calculate today's stats from todayLogs (authoritative source)
       const today = new Date().toISOString().split('T')[0];
       const activeMedicines = medicinesData.filter(med => {
         if (med.startDate && today < med.startDate) return false;
@@ -110,6 +111,11 @@ function Dashboard() {
         pending: totalPending,
         total: totalScheduled
       });
+
+      // Trigger notification refresh in Header
+      setNotificationRefreshTrigger(prev => prev + 1);
+
+      return medicinesData; // Return for chaining
 
     } catch (error) {
       console.error("Error fetching dashboard data:", error);
@@ -219,7 +225,7 @@ function Dashboard() {
   }
 
   return (
-    <AppShell title="Dashboard" subtitle="Your medication overview">
+    <AppShell title="Dashboard" subtitle="Your medication overview" notificationRefreshTrigger={notificationRefreshTrigger}>
       <div className="dashboard-container">
         {/* Push notification prompt */}
         {showPushPrompt && (
@@ -407,7 +413,12 @@ function Dashboard() {
                 </div>
               </Card.Header>
               <Card.Body>
-                <MedicineList medicines={medicines} setMedicines={setMedicines} refreshMedicines={() => fetchDashboardData(false)} navigate={navigate} />
+                <MedicineList 
+                  medicines={medicines} 
+                  setMedicines={setMedicines} 
+                  refreshMedicines={() => fetchDashboardData(false)} 
+                  navigate={navigate} 
+                />
               </Card.Body>
             </Card>
           </div>

@@ -5,7 +5,7 @@ import API from "../services/api";
 /**
  * Header - Modern application header with navigation, notifications, and profile
  */
-function Header({ onMenuToggle, title, subtitle, showBackButton, onBack }) {
+function Header({ onMenuToggle, title, subtitle, showBackButton, onBack, refreshTrigger }) {
   const navigate = useNavigate();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [notifications, setNotifications] = useState([]);
@@ -61,6 +61,13 @@ function Header({ onMenuToggle, title, subtitle, showBackButton, onBack }) {
     const interval = setInterval(fetchNotifications, 30000); // Refresh every 30s
     return () => clearInterval(interval);
   }, [fetchNotifications]);
+
+  // Refresh notifications when refreshTrigger changes
+  useEffect(() => {
+    if (refreshTrigger) {
+      fetchNotifications();
+    }
+  }, [refreshTrigger, fetchNotifications]);
 
   // Handle clicks outside dropdowns
   useEffect(() => {
