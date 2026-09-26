@@ -265,8 +265,11 @@ exports.markTaken = async (req, res) => {
     const user = await User.findById(medicine.userId).select("maxMissedThreshold").lean();
     const maxMissedThreshold = user?.maxMissedThreshold || 3;
 
+    // Convert to plain object if it's a Mongoose document
+    const updatedObj = updated._id ? updated : updated; // Already plain object from aggregation pipeline
+
     res.json({ 
-      ...updated.toObject(), 
+      ...updatedObj, 
       takenTodayCount: takenLogsCount,
       maxMissedThreshold,
       todayLogs
