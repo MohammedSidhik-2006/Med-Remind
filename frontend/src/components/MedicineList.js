@@ -48,11 +48,14 @@ const formatTo12Hour = (timeStr) => {
   return `${String(formattedHour).padStart(2, "0")}:${min} ${ampm}`;
 };
 
-// Helper: get local date string YYYY-MM-DD
+// Helper: get local date string YYYY-MM-DD in IST (Asia/Kolkata) matching backend TZ
 const getLocalDate = () => {
-  const now = new Date();
-  const pad = n => String(n).padStart(2, "0");
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(new Date()); // Returns "YYYY-MM-DD" format
 };
 
 // Check if a medicine is active today (within date range)
@@ -290,11 +293,13 @@ function MedicineList({ medicines, setMedicines, loading, refreshMedicines, navi
 
   const getTodaySlots = (meds) => {
     const slots = [];
+    if (!Array.isArray(meds)) return slots;
     meds.forEach(med => {
-      if (!isMedicineActiveToday(med)) return;
-      const times = med.times && med.times.length > 0 ? med.times : [med.time];
+      if (!med || !isMedicineActiveToday(med)) return;
+      const times = Array.isArray(med.times) && med.times.length > 0 ? med.times : (med.time ? [med.time] : []);
       times.forEach(time => {
-        const log = med.todayLogs?.find(l => l.scheduledTime === time);
+        if (!time) return;
+        const log = Array.isArray(med.todayLogs) ? med.todayLogs.find(l => l && l.scheduledTime === time) : null;
         const status = log ? log.status : "pending";
         slots.push({
           ...med,
@@ -304,7 +309,7 @@ function MedicineList({ medicines, setMedicines, loading, refreshMedicines, navi
         });
       });
     });
-    return slots.sort((a, b) => a.slotTime.localeCompare(b.slotTime));
+    return slots.sort((a, b) => (a.slotTime || "").localeCompare(b.slotTime || ""));
   };
 
   const todaySlots = getTodaySlots(medicines);

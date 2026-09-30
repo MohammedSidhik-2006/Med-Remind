@@ -38,13 +38,22 @@ function Dashboard() {
     }
   }, [navigate]);
 
-  // Get user info from token
+  // Get user info from token safely supporting unicode
   const getUserInfo = () => {
     try {
       const token = localStorage.getItem("token");
       if (!token) return null;
-      const payload = JSON.parse(atob(token.split(".")[1]));
-      return payload;
+      const actualToken = token.startsWith("Bearer ") ? token.slice(7) : token;
+      const base64Url = actualToken.split(".")[1];
+      if (!base64Url) return null;
+      const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+      const jsonPayload = decodeURIComponent(
+        window.atob(base64)
+          .split("")
+          .map(c => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+          .join("")
+      );
+      return JSON.parse(jsonPayload);
     } catch {
       return null;
     }
@@ -57,13 +66,17 @@ function Dashboard() {
     if (showLoading) setLoading(true);
     
     try {
-      const [medicinesRes, reportsRes] = await Promise.all([
+      const [medicinesRes, reportsRes] = await Promise.allSettled([
         API.get("/medicine"),
         API.get("/medicine/reports?period=month")
       ]);
 
-      const medicinesData = medicinesRes.data;
-      const reportsData = reportsRes.data;
+      const medicinesData = medicinesRes.status === "fulfilled" && Array.isArray(medicinesRes.value?.data)
+        ? medicinesRes.value.data
+        : [];
+      const reportsData = reportsRes.status === "fulfilled" && reportsRes.value?.data
+        ? reportsRes.value.data
+        : {};
 
       setMedicines(medicinesData);
       setStreak(reportsData.streak || 0);
@@ -74,9 +87,19 @@ function Dashboard() {
         localStorage.setItem("medremind_cached_medicines", JSON.stringify(medicinesData));
       } catch (storageErr) {}
 
-      // Calculate today's stats from todayLogs (authoritative source)
-      const today = new Date().toISOString().split('T')[0];
+      // Compute today in IST (UTC+5:30) to match backend TZ=Asia/Kolkata
+      // Using Intl.DateTimeFormat ensures correctness regardless of user's browser timezone
+      const now = new Date();
+      const todayIST = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Kolkata",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit"
+      }).format(now); // Returns "YYYY-MM-DD" format
+      const today = todayIST;
+
       const activeMedicines = medicinesData.filter(med => {
+        if (!med) return false;
         if (med.startDate && today < med.startDate) return false;
         if (med.endDate && today > med.endDate) return false;
         return true;
@@ -88,12 +111,12 @@ function Dashboard() {
       let totalPending = 0;
 
       activeMedicines.forEach(med => {
-        const times = med.times?.length > 0 ? med.times : [med.time];
+        const times = Array.isArray(med.times) && med.times.length > 0 ? med.times : (med.time ? [med.time] : []);
         times.forEach((slotTime) => {
           totalScheduled++;
-          const slotLog = med.todayLogs?.find(log => 
-            log.scheduledTime === slotTime
-          );
+          const slotLog = Array.isArray(med.todayLogs) ? med.todayLogs.find(log => 
+            log && log.scheduledTime === slotTime
+          ) : null;
           
           if (slotLog) {
             if (slotLog.status === "taken") totalTaken++;
@@ -123,7 +146,7 @@ function Dashboard() {
         const cached = localStorage.getItem("medremind_cached_medicines");
         if (cached) {
           const cachedMeds = JSON.parse(cached);
-          setMedicines(cachedMeds);
+          setMedicines(Array.isArray(cachedMeds) ? cachedMeds : []);
           addToast("Operating offline — displaying cached medication schedules", "info");
         } else {
           addToast("Failed to load dashboard data", "error");
@@ -191,15 +214,15 @@ function Dashboard() {
     const now = new Date();
     const currentTime = now.toTimeString().slice(0, 5); // HH:MM format
     
-    const upcoming = medicines
-      .filter(med => med.confirmationPending || !med.taken)
+    const upcoming = (Array.isArray(medicines) ? medicines : [])
+      .filter(med => med && (med.confirmationPending || !med.taken))
       .map(med => {
-        const times = med.times?.length > 0 ? med.times : [med.time];
+        const times = Array.isArray(med.times) && med.times.length > 0 ? med.times : (med.time ? [med.time] : []);
         return times.map(time => ({ ...med, scheduledTime: time }));
       })
       .flat()
-      .filter(med => med.scheduledTime >= currentTime)
-      .sort((a, b) => a.scheduledTime.localeCompare(b.scheduledTime));
+      .filter(med => med && med.scheduledTime && med.scheduledTime >= currentTime)
+      .sort((a, b) => (a.scheduledTime || "").localeCompare(b.scheduledTime || ""));
 
     return upcoming[0] || null;
   };
@@ -386,7 +409,7 @@ function Dashboard() {
                 <div className="progress-breakdown mt-4">
                   <div className="flex justify-between text-sm">
                     <span className="text-success">✓ Taken: {stats.taken}</span>
-                    <span className="text-warning">â³ Pending: {stats.pending}</span>
+                    <span className="text-warning">⏳ Pending: {stats.pending}</span>
                     <span className="text-danger">✗ Missed: {stats.missed}</span>
                   </div>
                 </div>

@@ -7,8 +7,8 @@ import API from "../services/api";
 
 // Simple bar chart component (no external deps)
 function BarChart({ data, height = 120 }) {
-  if (!data || data.length === 0) return null;
-  const max = Math.max(...data.map(d => d.total || 1), 1);
+  if (!Array.isArray(data) || data.length === 0) return null;
+  const max = Math.max(...data.map(d => (d && d.total) || 1), 1);
 
   return (
     <div style={{ width: "100%", overflowX: "auto", paddingBottom: "8px" }}>
@@ -53,7 +53,7 @@ function BarChart({ data, height = 120 }) {
 
 // Adherence line/area chart
 function AdherenceChart({ data, height = 120 }) {
-  if (!data || data.length === 0) return null;
+  if (!Array.isArray(data) || data.length === 0) return null;
   const w = 100;
   const h = height;
   const pts = data.map((d, i) => ({
@@ -106,9 +106,10 @@ function Reports() {
     setLoading(true);
     try {
       const res = await API.get(`/medicine/reports?period=${period}`);
-      setData(res.data);
+      setData(res?.data || {});
     } catch (err) {
-      console.error("Reports error:", err);
+      console.error("Reports error:", err.message);
+      setData({});
     } finally {
       setLoading(false);
     }
@@ -116,12 +117,22 @@ function Reports() {
 
   useEffect(() => { fetchReports(); }, [fetchReports]);
 
-  const chartData = data?.dailyData?.map(d => ({
-    ...d,
-    label: new Date(d.date + "T00:00:00").toLocaleDateString("en-US", {
-      month: "short", day: "numeric"
-    }).replace(" ", "\n")
-  })) || [];
+  const dailyList = Array.isArray(data?.dailyData) ? data.dailyData : [];
+  const chartData = dailyList.map(d => {
+    let label = d?.date || "";
+    try {
+      if (d?.date && d.date.includes("-")) {
+        const [y, m, day] = d.date.split("-").map(Number);
+        const dObj = new Date(Date.UTC(y, m - 1, day));
+        label = dObj.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }).replace(" ", "\n");
+      }
+    } catch {}
+    return {
+      ...d,
+      total: (d?.taken || 0) + (d?.missed || 0),
+      label
+    };
+  });
 
   const streakColor = data?.streak >= 7 ? "var(--warning)" : data?.streak >= 3 ? "var(--success)" : "var(--text-muted)";
   const streakText = data?.streak >= 7 ? "Active" : data?.streak >= 3 ? "On Track" : "Streak";
@@ -265,7 +276,7 @@ function Reports() {
                       border: "1px solid var(--border-light)"
                     }}>
                       <div style={{ width: "90px", fontSize: "12px", color: "var(--text-muted)", fontWeight: "700", textTransform: "uppercase" }}>
-                        {new Date(d.date + "T00:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                        {new Date(d.date + "T00:00:00Z").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
                       </div>
                       <div style={{ flex: 1, background: "#e2e8f0", borderRadius: "6px", height: "8px", overflow: "hidden" }}>
                         {d.total > 0 && (

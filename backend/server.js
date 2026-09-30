@@ -34,17 +34,31 @@ app.use((req, res, next) => {
 
 const rawOrigins = process.env.CORS_ORIGIN || "http://localhost:3000,https://med-remind-green.vercel.app";
 const corsOrigins = rawOrigins.split(',').map(s => s.trim().replace(/\/+$/, '')).filter(Boolean);
+
+const isAllowedOrigin = (origin) => {
+  if (!origin) return true; // Allow mobile apps, curl, server-to-server, same-origin
+  const normalized = origin.replace(/\/+$/, "");
+  // Allow all localhost origins (e.g., http://localhost:3000, http://localhost:5173, etc.)
+  if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(normalized)) return true;
+  // Allow all Vercel deployment domains (production, preview branches, etc.)
+  if (/^https:\/\/.*\.vercel\.app$/.test(normalized)) return true;
+  // Allow explicitly configured origins
+  if (corsOrigins.includes(normalized) || corsOrigins.includes("*")) return true;
+  return false;
+};
+
 app.use(cors({
   origin: function(origin, callback) {
-    const normalizedOrigin = origin ? origin.replace(/\/+$/, '') : '';
-    if (!origin || corsOrigins.includes(normalizedOrigin) || corsOrigins.includes('*')) {
+    if (isAllowedOrigin(origin)) {
       callback(null, true);
     } else {
-      console.error(`CORS blocked origin: ${origin}`);
-      callback(new Error('Not allowed by CORS'));
+      console.warn(`[CORS] Blocked request from unauthorized origin: ${origin}`);
+      callback(null, false);
     }
   },
-  credentials: true
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"]
 }));
 
 app.use(express.json({ limit: "10kb" }));
@@ -54,10 +68,10 @@ let lastCronRun = null;
 let cronRunCount = 0;
 global.recordCronTick = () => { lastCronRun = new Date(); cronRunCount++; };
 
-// ── Routes ────────────────────────────────────────────────────
-app.get("/", (req, res) => res.json({ status: "MedRemind API Running", version: "1.0.0" }));
+// ── Root & Health Routes (support with and without /api) ───────
+app.get(["/", "/api"], (req, res) => res.json({ status: "MedRemind API Running", version: "1.0.0" }));
 
-app.get("/api/health", (req, res) => {
+const healthHandler = (req, res) => {
   const mem = process.memoryUsage();
   res.json({
     status: "Success",
@@ -69,19 +83,23 @@ app.get("/api/health", (req, res) => {
       heapUsed: `${Math.round(mem.heapUsed / 1024 / 1024)}MB`
     }
   });
-});
+};
+app.get("/api/health", healthHandler);
+app.get("/health", healthHandler);
 
-// VAPID public key — frontend needs this to subscribe
-app.get("/api/vapid-public-key", (req, res) => {
+// VAPID public key — frontend needs this to subscribe (support both paths)
+const vapidHandler = (req, res) => {
   const key = process.env.VAPID_PUBLIC_KEY;
   if (!key) return res.status(500).json({ message: "VAPID not configured" });
   res.json({ publicKey: key });
-});
+};
+app.get("/api/vapid-public-key", vapidHandler);
+app.get("/vapid-public-key", vapidHandler);
 
-// Save or update push subscription for the logged-in user
-app.post("/api/save-subscription", authMiddleware, async (req, res) => {
+// Save or update push subscription for the logged-in user (support both paths)
+const saveSubscriptionHandler = async (req, res) => {
   try {
-    const { endpoint, keys } = req.body;
+    const { endpoint, keys } = req.body || {};
     if (!endpoint || !keys?.p256dh || !keys?.auth) {
       return res.status(400).json({ message: "Invalid subscription object" });
     }
@@ -93,13 +111,15 @@ app.post("/api/save-subscription", authMiddleware, async (req, res) => {
     console.error("save-subscription error:", err.message);
     res.status(500).json({ message: "Server error" });
   }
-});
+};
+app.post("/api/save-subscription", authMiddleware, saveSubscriptionHandler);
+app.post("/save-subscription", authMiddleware, saveSubscriptionHandler);
 
-// Test push notification — sends to the logged-in user
-app.post("/api/send-notification", authMiddleware, async (req, res) => {
+// Test push notification — sends to the logged-in user (support both paths)
+const sendNotificationHandler = async (req, res) => {
   try {
-    const title = req.body.title || "MedRemind Test";
-    const body = req.body.body || "Push notifications are working!";
+    const title = req.body?.title || "MedRemind Test";
+    const body = req.body?.body || "Push notifications are working!";
     const ok = await sendPushToUser(req.user.id, { title, body, icon: "/logo192.png", tag: "test" });
     if (ok) return res.json({ message: "Push notification sent" });
     res.status(400).json({ message: "No subscription found or push failed. Subscribe first." });
@@ -107,12 +127,22 @@ app.post("/api/send-notification", authMiddleware, async (req, res) => {
     console.error("send-notification error:", err.message);
     res.status(500).json({ message: "Server error" });
   }
-});
+};
+app.post("/api/send-notification", authMiddleware, sendNotificationHandler);
+app.post("/send-notification", authMiddleware, sendNotificationHandler);
 
+// ── Application Routers (Dual-mounted with and without /api) ──
 app.use("/api/auth", authRoutes);
+app.use("/auth", authRoutes);
+
 app.use("/api/medicine", medicineRoutes);
+app.use("/medicine", medicineRoutes);
+
 app.use("/api/admin", adminRoutes);
+app.use("/admin", adminRoutes);
+
 app.use("/api/caregiver", caregiverRoutes);
+app.use("/caregiver", caregiverRoutes);
 
 // ── 404 ───────────────────────────────────────────────────────
 app.use((req, res) => res.status(404).json({ message: "Route not found" }));

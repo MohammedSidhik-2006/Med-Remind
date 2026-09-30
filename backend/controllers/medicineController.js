@@ -231,7 +231,7 @@ exports.markTaken = async (req, res) => {
           }
         }
       ],
-      { returnDocument: "after" }
+      { returnDocument: "after", updatePipeline: true }
     );
 
     // Notify caregivers
@@ -252,9 +252,10 @@ exports.markTaken = async (req, res) => {
 
     // Use the updated medicine from database to get accurate stock for notification
     if (shouldNotifyRefill) {
+      const remainingStock = updated ? updated.stock : Math.max(0, currentStock - 1);
       sendPushToUser(medicine.userId, {
         title: `📦 Low Stock: ${medicine.name}`,
-        body:  `Only ${updated.stock} doses remaining. Please refill soon.`,
+        body:  `Only ${remainingStock} doses remaining. Please refill soon.`,
         icon:  "/logo192.png",
         tag:   `refill-${medicine._id}`
       }).catch(e => console.error("Error sending immediate refill alert:", e.message));
@@ -266,7 +267,7 @@ exports.markTaken = async (req, res) => {
     const maxMissedThreshold = user?.maxMissedThreshold || 3;
 
     // Convert to plain object if it's a Mongoose document
-    const updatedObj = updated._id ? updated : updated; // Already plain object from aggregation pipeline
+    const updatedObj = updated ? (updated._doc ? updated._doc : updated) : {};
 
     res.json({ 
       ...updatedObj, 

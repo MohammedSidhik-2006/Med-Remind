@@ -63,9 +63,9 @@ function CaregiverLinking() {
     setError(null);
     try {
       const res = await API.get("/caregiver/my-caregiver");
-      setRelation(res.data.relation);
+      setRelation(res?.data?.relation || null);
     } catch (err) {
-      console.error("Error fetching caregiver:", err);
+      console.error("Error fetching caregiver:", err.message);
       setError(err.response?.data?.message || "Failed to load caregiver connection.");
     } finally {
       setLoading(false);

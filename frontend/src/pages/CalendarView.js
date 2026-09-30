@@ -16,9 +16,10 @@ const spinKeyframes = `
 }
 `;
 
-// Inject styles
-if (typeof document !== 'undefined') {
+// Inject styles once (guard against duplicate injection on hot-reload)
+if (typeof document !== 'undefined' && !document.getElementById('calendar-spin-style')) {
   const styleElement = document.createElement('style');
+  styleElement.id = 'calendar-spin-style';
   styleElement.innerHTML = spinKeyframes;
   document.head.appendChild(styleElement);
 }
@@ -56,12 +57,18 @@ function CalendarView() {
 
   const fetchReports = useCallback(async () => {
     try {
-      const [resReports, resMeds] = await Promise.all([
+      const [resReports, resMeds] = await Promise.allSettled([
         API.get("/medicine/reports?period=month"),
         API.get("/medicine")
       ]);
-      setReportData(resReports.data.dailyData || []);
-      setAllMedicines(resMeds.data || []); // resMeds.data is the array directly from controller
+      const reportDaily = resReports.status === "fulfilled" && Array.isArray(resReports.value?.data?.dailyData)
+        ? resReports.value.data.dailyData
+        : [];
+      const medsList = resMeds.status === "fulfilled" && Array.isArray(resMeds.value?.data)
+        ? resMeds.value.data
+        : [];
+      setReportData(reportDaily);
+      setAllMedicines(medsList);
     } catch (err) {
       console.error("Calendar reports error:", err);
     } finally {
@@ -71,8 +78,11 @@ function CalendarView() {
 
   useEffect(() => { fetchReports(); }, [fetchReports]);
 
-  // Lookup by date string
-  const dataByDate = reportData.reduce((acc, d) => { acc[d.date] = d; return acc; }, {});
+  // Lookup by date string safely
+  const dataByDate = (Array.isArray(reportData) ? reportData : []).reduce((acc, d) => {
+    if (d && d.date) acc[d.date] = d;
+    return acc;
+  }, {});
 
   const todayStr = localDateStr();
   const year     = currentDate.getFullYear();

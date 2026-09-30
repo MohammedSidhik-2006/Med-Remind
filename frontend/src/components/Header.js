@@ -14,13 +14,22 @@ function Header({ onMenuToggle, title, subtitle, showBackButton, onBack, refresh
   const notificationRef = useRef(null);
   const profileRef = useRef(null);
 
-  // Get user info from token
+  // Get user info from token safely supporting unicode and url-safe base64
   const getUserInfo = () => {
     try {
       const token = localStorage.getItem("token");
       if (!token) return null;
-      const payload = JSON.parse(atob(token.split(".")[1]));
-      return payload;
+      const actualToken = token.startsWith("Bearer ") ? token.slice(7) : token;
+      const base64Url = actualToken.split(".")[1];
+      if (!base64Url) return null;
+      const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+      const jsonPayload = decodeURIComponent(
+        window.atob(base64)
+          .split("")
+          .map(c => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+          .join("")
+      );
+      return JSON.parse(jsonPayload);
     } catch {
       return null;
     }
@@ -32,6 +41,7 @@ function Header({ onMenuToggle, title, subtitle, showBackButton, onBack, refresh
   const userAvatar = user?.avatar || "👤";
   const initials = userName
     .split(" ")
+    .filter(Boolean)
     .map(name => name[0])
     .join("")
     .toUpperCase()
@@ -45,14 +55,16 @@ function Header({ onMenuToggle, title, subtitle, showBackButton, onBack, refresh
 
   // Fetch pending medications for notifications
   const fetchNotifications = useCallback(async () => {
+    if (!localStorage.getItem("token")) return;
     try {
       const res = await API.get("/medicine");
-      const pending = res.data.filter(med => 
-        med.confirmationPending && !med.taken
+      const medList = Array.isArray(res?.data) ? res.data : [];
+      const pending = medList.filter(med => 
+        med && med.confirmationPending && !med.taken
       );
       setNotifications(pending);
     } catch (error) {
-      console.error("Failed to fetch notifications:", error);
+      console.error("Failed to fetch notifications:", error.message);
     }
   }, []);
 

@@ -99,12 +99,14 @@ function Profile() {
   const fetchProfile = useCallback(async () => {
     try {
       const res = await API.get("/auth/profile");
-      setProfile(res.data.user);
-      setStats(res.data.stats);
-      setEditName(res.data.user.name);
-      setMaxMissedThreshold(res.data.user.maxMissedThreshold !== undefined ? res.data.user.maxMissedThreshold : 3);
+      if (res?.data?.user) {
+        setProfile(res.data.user);
+        setStats(res.data.stats || {});
+        setEditName(res.data.user.name || "");
+        setMaxMissedThreshold(res.data.user.maxMissedThreshold !== undefined ? res.data.user.maxMissedThreshold : 3);
+      }
     } catch (err) {
-      console.error("fetchProfile error:", err);
+      console.error("fetchProfile error:", err.message);
       if (err.response?.status === 401) {
         navigate("/");
       }

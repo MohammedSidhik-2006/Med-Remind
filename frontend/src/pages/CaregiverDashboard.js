@@ -56,9 +56,17 @@ function CaregiverDashboard() {
     setError(null);
     try {
       const res = await API.get(`/caregiver/patient/${patientId}/dashboard`);
-      setPatientData(res.data);
+      if (res?.data) {
+        setPatientData({
+          ...res.data,
+          medicines: Array.isArray(res.data.medicines) ? res.data.medicines : [],
+          logs: Array.isArray(res.data.logs) ? res.data.logs : []
+        });
+      } else {
+        setPatientData(null);
+      }
     } catch (err) {
-      console.error("Error fetching patient dashboard:", err);
+      console.error("Error fetching patient dashboard:", err.message);
       setError(err.response?.data?.message || "Failed to load patient monitoring details.");
     } finally {
       setLoadingDashboard(false);
@@ -304,7 +312,7 @@ function CaregiverDashboard() {
                         <button className="refresh-btn" onClick={() => fetchPatientDashboard(selectedPatientId)}>↻</button>
                       </div>
 
-                      {patientData.medicines.length === 0 ? (
+                      {(!patientData.medicines || patientData.medicines.length === 0) ? (
                         <div className="empty-state">
                           <p>No active medication schedules logged for this patient.</p>
                         </div>
@@ -373,13 +381,13 @@ function CaregiverDashboard() {
                         <h3>Dose Log History</h3>
                       </div>
 
-                      {patientData.logs.length === 0 ? (
+                      {(!patientData.logs || patientData.logs.length === 0) ? (
                         <div className="empty-state" style={{ padding: "24px" }}>
                           <p>No recent activity logs recorded for this patient.</p>
                         </div>
                       ) : (
                         <div style={{ display: "flex", flexDirection: "column", gap: "10px", maxHeight: "350px", overflowY: "auto", paddingRight: "4px" }}>
-                          {patientData.logs.map((log) => {
+                          {(patientData.logs || []).map((log) => {
                             const isTaken = log.status === "taken";
                             return (
                               <div 

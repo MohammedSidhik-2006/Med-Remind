@@ -43,19 +43,22 @@ function Navbar({ onToggleSidebar, globalMedicines }) {
   }, []);
 
   const fetchPendingMedicines = useCallback(async () => {
+    if (!localStorage.getItem("token")) return;
     try {
       const res = await API.get("/medicine");
-      const pending = res.data.filter(m => m.confirmationPending && !m.taken);
+      const list = Array.isArray(res?.data) ? res.data : [];
+      const pending = list.filter(m => m && m.confirmationPending && !m.taken);
       setPendingMeds(pending);
     } catch (err) {
-      console.error("Navbar notification count error:", err);
+      console.error("Navbar notification count error:", err.message);
     }
   }, []);
 
   useEffect(() => {
     if (globalMedicines) {
       // Sync instantly from parent (like Dashboard)
-      setPendingMeds(globalMedicines.filter(m => m.confirmationPending && !m.taken));
+      const list = Array.isArray(globalMedicines) ? globalMedicines : [];
+      setPendingMeds(list.filter(m => m && m.confirmationPending && !m.taken));
     } else {
       // Fallback for pages without globalMedicines
       fetchPendingMedicines();

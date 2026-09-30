@@ -22,9 +22,10 @@ function HistoryLog() {
   const fetchLogs = useCallback(async () => {
     try {
       const res = await API.get("/medicine/logs?limit=300");
-      setLogs(res.data);
+      setLogs(Array.isArray(res?.data) ? res.data : []);
     } catch (err) {
       console.error("Error fetching dose logs:", err);
+      setLogs([]);
     } finally {
       setLoading(false);
     }
@@ -32,20 +33,22 @@ function HistoryLog() {
 
   useEffect(() => { fetchLogs(); }, [fetchLogs]);
 
-  const filtered = filter === "all" ? logs : logs.filter(l => l.status === filter);
+  const logList = Array.isArray(logs) ? logs : [];
+  const filtered = filter === "all" ? logList : logList.filter(l => l && l.status === filter);
 
   // Group entries by date (already sorted newest-first from backend)
   const grouped = filtered.reduce((acc, log) => {
+    if (!log || !log.date) return acc;
     if (!acc[log.date]) acc[log.date] = [];
     acc[log.date].push(log);
     return acc;
   }, {});
   const dates = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
 
-  const countTaken  = logs.filter(l => l.status === "taken").length;
-  const countMissed = logs.filter(l => l.status === "missed").length;
-  const adherence   = logs.length > 0
-    ? Math.round((countTaken / logs.length) * 100) : 0;
+  const countTaken  = logList.filter(l => l && l.status === "taken").length;
+  const countMissed = logList.filter(l => l && l.status === "missed").length;
+  const adherence   = logList.length > 0
+    ? Math.round((countTaken / logList.length) * 100) : 0;
 
   return (
     <AppShell>
@@ -234,7 +237,7 @@ function HistoryLog() {
                       <div className="timeline-date-header">
                         <div className="timeline-date">
                           <div className="date-text">
-                            {new Date(date + "T00:00:00").toLocaleDateString("en-US", {
+                            {new Date(date + "T00:00:00Z").toLocaleDateString("en-US", {
                               weekday: "short", 
                               day: "numeric", 
                               month: "short", 

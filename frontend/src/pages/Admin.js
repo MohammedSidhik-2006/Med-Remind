@@ -99,15 +99,17 @@ function Admin() {
   const fetchTab = async (t) => {
     setLoading(true);
     try {
-      if (t === "users")   { const r = await API.get("/admin/users");        setUsers(r.data); }
-      if (t === "audit")   { const r = await API.get("/admin/audit");        setAudit(r.data); }
-      if (t === "meddb")   { const r = await API.get("/admin/med-database"); setMedDb(r.data); }
+      if (t === "users")   { const r = await API.get("/admin/users");        setUsers(Array.isArray(r?.data) ? r.data : []); }
+      if (t === "audit")   { const r = await API.get("/admin/audit");        setAudit(Array.isArray(r?.data) ? r.data : []); }
+      if (t === "meddb")   { const r = await API.get("/admin/med-database"); setMedDb(Array.isArray(r?.data) ? r.data : []); }
       if (t === "userMeds") { 
         const r = await API.get(`/admin/medicines?page=${medsPage}&limit=10`); 
-        setUserMeds(r.data.medicines); 
-        setMedsTotalPages(r.data.totalPages);
+        setUserMeds(Array.isArray(r?.data?.medicines) ? r.data.medicines : []); 
+        setMedsTotalPages(r?.data?.totalPages || 1);
       }
-    } catch { /* handled */ }
+    } catch (e) {
+      console.error("fetchTab error:", e.message);
+    }
     setLoading(false);
   };
 

@@ -312,8 +312,10 @@ const startReminder = () => {
         }
       }
 
-      // ── 3. Daily 08:00 reset ─────────────
-      if (currentTime === "08:00") {
+      // ── 3. Daily reset window: 08:00–08:05 (robust against Render cold-start restarts) ─────────
+      // Using a 5-minute window instead of exact 08:00 match prevents missed resets
+      // when the server restarts between 07:59-08:01. lastResetDate prevents double-runs.
+      if (currentTime >= "08:00" && currentTime <= "08:05") {
         try {
           const { catchUpMedicinesForUser } = require("../middleware/catchUpMiddleware");
           const staleMeds = await Medicine.find({ lastResetDate: { $ne: today } });
@@ -321,7 +323,9 @@ const startReminder = () => {
           for (const uId of userIds) {
             await catchUpMedicinesForUser(uId);
           }
-          console.log(`✅ Daily reset & catch-up complete for ${today}`);
+          if (userIds.length > 0) {
+            console.log(`✅ Daily reset & catch-up complete for ${today} (${userIds.length} users)`);
+          }
         } catch (err) {
           console.error("Error doing daily medicine reset in reminderService:", err.message);
         }

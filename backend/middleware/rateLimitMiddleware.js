@@ -1,6 +1,9 @@
-const rateLimit = require("express-rate-limit");
+const { rateLimit, MemoryStore } = require("express-rate-limit");
+
+const store = new MemoryStore();
 
 const rateLimitAuth = rateLimit({
+  store,
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 10, // Limit each IP to 10 requests per window
   message: { message: "Too many attempts. Try again in 15 minutes." },
@@ -8,4 +11,14 @@ const rateLimitAuth = rateLimit({
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
 });
 
-module.exports = { rateLimitAuth };
+const loginAttempts = {
+  clear: () => {
+    try {
+      store.resetAll();
+    } catch (e) {
+      console.warn("Could not reset rate limit store:", e.message);
+    }
+  }
+};
+
+module.exports = { rateLimitAuth, loginAttempts };

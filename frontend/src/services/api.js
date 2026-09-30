@@ -3,43 +3,61 @@ import axios from "axios";
 // Determine the API base URL
 // Priority: REACT_APP_API_URL env var → runtime hostname check → fallback to Render
 const getBaseURL = () => {
-  // 1. Explicit env var (set in Vercel dashboard) always wins
   if (process.env.REACT_APP_API_URL) {
     return process.env.REACT_APP_API_URL.replace(/\/+$/, "");
   }
-  // 2. Runtime check — cannot be tree-shaken since window is evaluated at runtime
   const hostname = typeof window !== "undefined" ? window.location.hostname : "";
   if (hostname === "localhost" || hostname === "127.0.0.1") {
     return "http://localhost:5000";
   }
-  // 3. Production fallback — always goes to Render backend
   return "https://medi-time-2peh.onrender.com";
 };
 
 const API = axios.create({
   baseURL: getBaseURL(),
-  timeout: 15000
+  timeout: 60000 // 60s timeout to gracefully accommodate Render cold starts
 });
 
+// Request interceptor: normalize endpoint paths & attach JWT token
+API.interceptors.request.use(
+  (req) => {
+    // If the base URL does not end with /api, and the request URL doesn't start with /api or http,
+    // ensure /api prefix is present so requests match standard backend routes
+    const currentBase = (req.baseURL || "").replace(/\/+$/, "");
+    if (!currentBase.endsWith("/api") && req.url && !req.url.startsWith("/api") && !req.url.startsWith("http")) {
+      const cleanUrl = req.url.startsWith("/") ? req.url : `/${req.url}`;
+      req.url = `/api${cleanUrl}`;
+    }
 
-// Attach JWT token to every request
-API.interceptors.request.use((req) => {
-  const token = localStorage.getItem("token");
-  if (token) {
-    req.headers.Authorization = token;
-  }
-  return req;
-});
+    const token = localStorage.getItem("token");
+    if (token) {
+      req.headers.Authorization = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    }
+    return req;
+  },
+  (error) => Promise.reject(error)
+);
 
-// On 401 (expired / invalid token), clear storage and redirect to login
+// Response interceptor: handle token expirations and network errors
 API.interceptors.response.use(
   (res) => res,
   (err) => {
     if (err.response?.status === 401) {
-      localStorage.removeItem("token");
-      // Only redirect if not already on the login/register/forgot-password page
-      if (!window.location.pathname.match(/^\/(register|forgot-password)?$/)) {
-        window.location.href = "/";
+      // Do NOT redirect or clear storage if the 401 comes from login/register/password-reset attempts
+      const isAuthAttempt =
+        err.config?.url?.includes("/auth/login") ||
+        err.config?.url?.includes("/auth/register") ||
+        err.config?.url?.includes("/auth/forgot-password") ||
+        err.config?.url?.includes("/auth/reset-password");
+
+      if (!isAuthAttempt) {
+        localStorage.removeItem("token");
+        if (typeof window !== "undefined") {
+          const path = window.location.pathname;
+          if (path !== "/" && path !== "/register" && path !== "/forgot-password") {
+            window.location.href = "/";
+          }
+        }
       }
     }
     return Promise.reject(err);
