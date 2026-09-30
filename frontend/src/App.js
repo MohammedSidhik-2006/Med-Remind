@@ -1,8 +1,9 @@
-import React, { lazy, Suspense } from "react";
+import React, { lazy, Suspense, useEffect } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ToastProvider } from "./components/Toast";
 import LoadingSpinner from "./components/LoadingSpinner";
+import { initOfflineNotifications } from "./services/offlineSync";
 
 // Import design system
 import "./styles/design-system.css";
@@ -25,6 +26,10 @@ const CaregiverDashboard = lazy(() => import("./pages/CaregiverDashboard"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 function App() {
+  useEffect(() => {
+    initOfflineNotifications();
+  }, []);
+
   return (
     <ErrorBoundary>
       <ToastProvider>

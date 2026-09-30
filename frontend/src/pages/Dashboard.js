@@ -4,7 +4,7 @@ import AppShell from "../components/AppShell";
 import { Card, Button, ProgressBar } from "../components/UI";
 import { SkeletonDashboard } from "../components/Skeleton";
 import API from "../services/api";
-import { setupPushNotifications } from "../services/notifications";
+import { setupPushNotifications, syncMedicinesToOfflineStorage } from "../services/notifications";
 import { useToast } from "../components/Toast";
 import MedicineList from "../components/MedicineList";
 import "./Dashboard.css";
@@ -82,9 +82,10 @@ function Dashboard() {
       setStreak(reportsData.streak || 0);
       setAdherenceRate(reportsData.overallAdherence || 0);
 
-      // Cache medicines locally for offline viewing
+      // Cache medicines locally for offline viewing and background alarms
       try {
         localStorage.setItem("medremind_cached_medicines", JSON.stringify(medicinesData));
+        syncMedicinesToOfflineStorage(medicinesData);
       } catch (storageErr) {}
 
       // Compute today in IST (UTC+5:30) to match backend TZ=Asia/Kolkata
@@ -184,21 +185,29 @@ function Dashboard() {
     }
   }, []);
 
+  // Listen for doses marked taken via Service Worker notifications while app is in background/offline
+  useEffect(() => {
+    const handleOfflineDose = () => {
+      fetchDashboardData(false);
+    };
+    window.addEventListener("medremind-dose-taken-offline", handleOfflineDose);
+    return () => window.removeEventListener("medremind-dose-taken-offline", handleOfflineDose);
+  }, [fetchDashboardData]);
+
   const handlePushSetup = async () => {
     setSettingUpPush(true);
     try {
       const success = await setupPushNotifications();
       if (success) {
         setShowPushPrompt(false);
-        addToast("Push notifications enabled successfully!", "success");
+        addToast("Medication reminders & offline alarms enabled!", "success");
       } else {
         setShowPushPrompt(false);
-        localStorage.setItem("pushPromptDismissed", "1");
-        addToast("Push notifications setup was cancelled", "info");
+        addToast("Notification setup was cancelled", "info");
       }
     } catch (error) {
       console.error("Push setup failed:", error);
-      addToast("Failed to setup push notifications", "error");
+      addToast("Failed to setup notifications", "error");
     } finally {
       setSettingUpPush(false);
     }

@@ -4,6 +4,7 @@ import Navbar from "../components/Navbar";
 import Sidebar from "../components/Sidebar";
 import Footer from "../components/Footer";
 import API from "../services/api";
+import { syncMedicinesToOfflineStorage } from "../services/notifications";
 
 function Modal({ title, message, icon, onConfirm }) {
   return (
@@ -44,7 +45,9 @@ function RefillTracker() {
   const fetchMedicines = async () => {
     try {
       const res = await API.get("/medicine");
-      setMedicines(Array.isArray(res?.data) ? res.data : []);
+      const list = Array.isArray(res?.data) ? res.data : [];
+      setMedicines(list);
+      syncMedicinesToOfflineStorage(list);
     } catch (err) {
       console.error("Error:", err);
       setMedicines([]);

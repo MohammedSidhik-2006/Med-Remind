@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import API from "../services/api";
+import { syncMedicinesToOfflineStorage } from "../services/notifications";
 
 // Reusable modal component
 function Modal({ title, message, icon, onConfirm, onCancel, confirmText, confirmClass, disabled, showCancel = true, children }) {
@@ -131,10 +132,11 @@ function MedicineList({ medicines, setMedicines, loading, refreshMedicines, navi
     });
   }, []);
 
-  // Trigger client-side fallbacks when medicines change
+  // Trigger client-side fallbacks and sync to Service Worker when medicines change
   useEffect(() => {
     if (medicines && medicines.length > 0) {
       checkAndNotify(medicines);
+      syncMedicinesToOfflineStorage(medicines);
     }
   }, [medicines, checkAndNotify]);
 
@@ -350,7 +352,11 @@ function MedicineList({ medicines, setMedicines, loading, refreshMedicines, navi
               const slotLocked = slot.slotStatus === "missed" && !canTakeSlot(slot);
 
               return (
-                <div className={`medicine-card status-${slot.slotStatus} ${slotLocked ? "is-locked" : ""}`} key={`${slot._id}-${slot.slotTime}`}>
+                <div 
+                  id={`med-card-${slot._id}`}
+                  className={`medicine-card status-${slot.slotStatus} ${slotLocked ? "is-locked" : ""}`} 
+                  key={`${slot._id}-${slot.slotTime}`}
+                >
                   <div style={{ display: "flex", alignItems: "center", flex: 1 }}>
                     <div className="medicine-icon">
                       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">

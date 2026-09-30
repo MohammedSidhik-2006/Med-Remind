@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../services/api";
 
@@ -34,6 +34,36 @@ function Navbar({ onToggleSidebar, globalMedicines }) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [pendingMeds, setPendingMeds] = useState([]);
+  const notificationRef = useRef(null);
+  const profileRef = useRef(null);
+
+  // Close dropdowns on outside click or Escape key
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (notificationRef.current && !notificationRef.current.contains(event.target)) {
+        setShowNotifications(false);
+      }
+      if (profileRef.current && !profileRef.current.contains(event.target)) {
+        setShowProfileMenu(false);
+      }
+    };
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setShowNotifications(false);
+        setShowProfileMenu(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("touchstart", handleClickOutside, { passive: true });
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -87,6 +117,18 @@ function Navbar({ onToggleSidebar, globalMedicines }) {
 
   return (
     <header className="navbar">
+      {/* Mobile backdrop for dropdowns */}
+      {(showNotifications || showProfileMenu) && (
+        <div 
+          className="navbar-mobile-backdrop"
+          onClick={() => {
+            setShowNotifications(false);
+            setShowProfileMenu(false);
+          }}
+          aria-hidden="true"
+        />
+      )}
+
       {/* LEFT: Hamburger Menu Button */}
       <button 
         onClick={onToggleSidebar}
@@ -124,7 +166,7 @@ function Navbar({ onToggleSidebar, globalMedicines }) {
       {/* RIGHT: Notifications + Profile Icons */}
       <div className="navbar-user">
         {/* Notification Bell */}
-        <div style={{ position: "relative" }}>
+        <div style={{ position: "relative" }} ref={notificationRef}>
           <button 
             className={`navbar-bell-btn ${pendingMeds.length > 0 ? "has-badge" : ""}`}
             onClick={() => {
@@ -133,7 +175,7 @@ function Navbar({ onToggleSidebar, globalMedicines }) {
             }}
             title="Notifications"
           >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
               <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
             </svg>
@@ -152,7 +194,7 @@ function Navbar({ onToggleSidebar, globalMedicines }) {
               <div className="dropdown-body">
                 {pendingMeds.length === 0 ? (
                   <div className="empty-dropdown">
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text-light)" strokeWidth="1.5" style={{ marginBottom: "8px" }}>
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--teal-500)" strokeWidth="1.5" style={{ marginBottom: "8px", background: "var(--primary-light)", padding: "8px", borderRadius: "50%", boxSizing: "content-box" }}>
                       <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
                       <polyline points="22 4 12 14.01 9 11.01" />
                     </svg>
@@ -185,7 +227,7 @@ function Navbar({ onToggleSidebar, globalMedicines }) {
         </div>
 
         {/* Profile Avatar Dropdown */}
-        <div style={{ position: "relative" }}>
+        <div style={{ position: "relative" }} ref={profileRef}>
           <button
             onClick={() => {
               setShowProfileMenu(!showProfileMenu);
@@ -339,8 +381,8 @@ function Navbar({ onToggleSidebar, globalMedicines }) {
 
         /* BELL */
         .navbar-bell-btn {
-          width: 36px;
-          height: 36px;
+          width: 38px;
+          height: 38px;
           border-radius: 50%;
           background: white;
           border: 1px solid var(--border-light);
@@ -352,74 +394,109 @@ function Navbar({ onToggleSidebar, globalMedicines }) {
           transition: all 0.2s ease;
           position: relative;
           flex-shrink: 0;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
         }
 
         .navbar-bell-btn:hover {
           color: var(--primary);
           background: var(--primary-light);
-          border-color: transparent;
+          border-color: var(--teal-200);
+        }
+
+        .navbar-bell-btn:focus {
+          outline: none;
+        }
+
+        .navbar-bell-btn:focus-visible {
+          outline: 2px solid var(--primary);
+          outline-offset: 2px;
         }
 
         .navbar-bell-btn.has-badge {
-          animation: pulse-ring 2s infinite;
+          animation: bell-ring-nav 3.5s ease-in-out infinite;
         }
 
-        @keyframes pulse-ring {
-          0% { box-shadow: 0 0 0 0 rgba(13, 148, 136, 0.4); }
-          70% { box-shadow: 0 0 0 4px rgba(13, 148, 136, 0); }
-          100% { box-shadow: 0 0 0 0 rgba(13, 148, 136, 0); }
+        @keyframes bell-ring-nav {
+          0%, 100% { transform: rotate(0); }
+          4%, 12% { transform: rotate(14deg); }
+          8%, 16% { transform: rotate(-14deg); }
+          20% { transform: rotate(0); }
         }
 
         .navbar-bell-badge {
           position: absolute;
-          top: -5px;
-          right: -5px;
+          top: -3px;
+          right: -3px;
           background: var(--danger);
           color: white;
-          font-size: 9px;
+          font-size: 10px;
           font-weight: 800;
-          min-width: 16px;
-          height: 16px;
-          border-radius: 8px;
+          min-width: 18px;
+          height: 18px;
+          padding: 0 4px;
+          border-radius: 9px;
           display: flex;
           align-items: center;
           justify-content: center;
           border: 2px solid white;
+          box-shadow: 0 2px 5px rgba(239, 68, 68, 0.4);
         }
 
         /* AVATAR */
         .navbar-avatar-btn {
-          width: 36px;
-          height: 36px;
+          width: 38px;
+          height: 38px;
           border-radius: 50%;
           background: linear-gradient(135deg, var(--primary) 0%, #0ea5e9 100%);
           border: 2px solid white;
           color: white;
           font-weight: 750;
-          font-size: 12px;
+          font-size: 13px;
           cursor: pointer;
           display: flex;
           align-items: center;
           justify-content: center;
           transition: all 0.2s ease;
-          box-shadow: 0 2px 6px rgba(13, 148, 136, 0.12);
+          box-shadow: 0 2px 6px rgba(13, 148, 136, 0.2);
           flex-shrink: 0;
         }
 
         .navbar-avatar-btn:hover {
           transform: scale(1.05);
+          box-shadow: 0 4px 12px rgba(13, 148, 136, 0.3);
+        }
+
+        .navbar-avatar-btn:focus {
+          outline: none;
+        }
+
+        .navbar-avatar-btn:focus-visible {
+          outline: 2px solid var(--primary);
+          outline-offset: 2px;
         }
 
         /* DROPDOWNS */
+        .navbar-mobile-backdrop {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(15, 23, 42, 0.25);
+          backdrop-filter: blur(2px);
+          -webkit-backdrop-filter: blur(2px);
+          z-index: 1040;
+        }
+
         .navbar-dropdown {
           position: absolute;
           top: calc(100% + 8px);
           right: 0;
           background: white;
-          border-radius: 8px;
+          border-radius: 12px;
           border: 1px solid var(--border-light);
-          box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
-          z-index: 1010;
+          box-shadow: 0 16px 40px -4px rgba(15, 23, 42, 0.16), 0 4px 12px -2px rgba(15, 23, 42, 0.08);
+          z-index: 1050;
           display: flex;
           flex-direction: column;
           overflow: hidden;
@@ -624,16 +701,30 @@ function Navbar({ onToggleSidebar, globalMedicines }) {
         }
 
         @media (max-width: 576px) {
-          .notifications-dropdown {
-            width: calc(100vw - 24px);
-            max-width: 280px;
+          .navbar-dropdown {
+            position: fixed;
+            top: 60px;
+            right: 12px;
             left: 12px;
-            right: auto;
+            width: auto;
+            max-width: 380px;
+            margin-left: auto;
+            min-width: 0;
+            max-height: calc(100vh - 76px);
+            z-index: 1050;
+            box-shadow: 0 20px 48px -4px rgba(15, 23, 42, 0.3), 0 8px 18px -2px rgba(15, 23, 42, 0.12);
+          }
+
+          .notifications-dropdown {
+            width: auto;
+            min-width: 0;
+            max-width: 380px;
           }
 
           .profile-dropdown {
-            width: calc(100vw - 24px);
-            max-width: 260px;
+            width: auto;
+            min-width: 0;
+            max-width: 280px;
             right: 12px;
             left: auto;
           }

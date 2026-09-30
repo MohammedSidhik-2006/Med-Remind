@@ -121,55 +121,117 @@
   font-family: var(--font-mono);
 }
 
-/* Notification button with badge */
-.btn.has-notifications {
+/* Header action icon buttons */
+.header-icon-btn {
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  min-height: 38px;
+  border-radius: var(--radius-full);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
   position: relative;
-  animation: btn-pulse 2s infinite;
+  transition: all var(--duration-normal) var(--ease);
+  padding: 0;
+  flex-shrink: 0;
+  border: 1px solid var(--border-light);
+  background: var(--white);
+  color: var(--text-secondary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
-@keyframes btn-pulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.05); }
+.header-icon-btn:hover {
+  background: var(--bg-subtle);
+  color: var(--text-primary);
+  border-color: var(--border);
+  transform: translateY(-1px);
 }
 
-.notification-badge {
+.header-icon-btn:active {
+  transform: scale(0.96);
+}
+
+.header-icon-btn:focus {
+  outline: none;
+}
+
+.header-icon-btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Bell button with notifications */
+.header-bell-btn:hover {
+  color: var(--primary);
+  background: var(--primary-light);
+  border-color: var(--teal-200);
+}
+
+.header-bell-btn.has-notifications {
+  animation: bell-ring 3.5s ease-in-out infinite;
+}
+
+@keyframes bell-ring {
+  0%, 100% { transform: rotate(0); }
+  4%, 12% { transform: rotate(14deg); }
+  8%, 16% { transform: rotate(-14deg); }
+  20% { transform: rotate(0); }
+}
+
+.header-bell-btn .notification-badge {
   position: absolute;
-  top: -4px;
-  right: -4px;
+  top: -3px;
+  right: -3px;
   background: var(--danger);
   color: var(--white);
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 800;
   min-width: 18px;
   height: 18px;
+  padding: 0 4px;
   border-radius: var(--radius-full);
   display: flex;
   align-items: center;
   justify-content: center;
   border: 2px solid var(--white);
+  box-shadow: 0 2px 5px rgba(239, 68, 68, 0.4);
 }
 
 /* Profile avatar */
 .profile-avatar {
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  min-height: 38px;
   border-radius: var(--radius-full);
   background: linear-gradient(135deg, var(--primary), var(--teal-500));
   color: var(--white);
   border: 2px solid var(--white);
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   transition: all var(--duration-normal) var(--ease);
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 2px 6px rgba(13, 148, 136, 0.2);
 }
 
 .profile-avatar:hover {
   transform: scale(1.05);
-  box-shadow: var(--shadow-md);
+  box-shadow: 0 4px 12px rgba(13, 148, 136, 0.3);
+}
+
+.profile-avatar:focus {
+  outline: none;
+}
+
+.profile-avatar:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 
 /* Dropdown positioning */
@@ -184,20 +246,22 @@
   background: var(--white);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-xl);
-  z-index: 50;
+  box-shadow: 0 16px 40px -4px rgba(15, 23, 42, 0.16), 0 4px 12px -2px rgba(15, 23, 42, 0.08);
+  z-index: 1050;
   min-width: 280px;
-  max-height: 400px;
+  max-height: 420px;
   overflow: hidden;
   animation: slideDown var(--duration-normal) var(--ease);
 }
 
 .notification-dropdown {
-  min-width: 320px;
+  width: 320px;
+  min-width: 300px;
 }
 
 .profile-dropdown {
-  min-width: 240px;
+  width: 250px;
+  min-width: 230px;
 }
 
 @keyframes slideDown {
@@ -272,9 +336,25 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: var(--space-8) var(--space-4);
+  justify-content: center;
+  padding: 32px 20px;
   text-align: center;
-  gap: var(--space-2);
+  gap: 10px;
+}
+
+.empty-notifications svg {
+  color: var(--teal-500);
+  background: var(--primary-light);
+  padding: 8px;
+  border-radius: var(--radius-full);
+  box-sizing: content-box;
+}
+
+.empty-notifications p {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 0;
 }
 
 .notification-item {
@@ -282,7 +362,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-3);
+  padding: 10px 12px;
   border: none;
   background: transparent;
   border-radius: var(--radius-md);
@@ -292,7 +372,7 @@
 }
 
 .notification-item:hover {
-  background: var(--warning-light);
+  background: var(--primary-light);
 }
 
 .notification-icon {
@@ -307,8 +387,47 @@
   flex-shrink: 0;
 }
 
+.notification-content {
+  flex: 1;
+  min-width: 0;
+}
+
 .notification-content p {
   margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Mobile backdrop for dropdowns */
+.dropdown-mobile-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(15, 23, 42, 0.25);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  z-index: 1040;
+  animation: fadeIn 0.15s ease-out;
+}
+
+@media (min-width: 641px) {
+  .dropdown-mobile-backdrop {
+    display: none;
+  }
+}
+
+/* Highlight pulse for medicine card when clicked from notification */
+@keyframes medCardPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(13, 148, 136, 0); }
+  50% { box-shadow: 0 0 0 4px rgba(13, 148, 136, 0.5); }
+}
+
+.med-card-highlight {
+  animation: medCardPulse 1.2s ease-in-out 2;
+  border-color: var(--primary) !important;
 }
 
 /* Desktop styles */
@@ -320,10 +439,39 @@
 
 /* Mobile adjustments */
 @media (max-width: 640px) {
-  .header { padding: var(--space-3) var(--space-4); }
-  .dropdown-menu  { left: var(--space-4); right: var(--space-4); width: auto; min-width: auto; }
+  .header { padding: 10px 14px; gap: 8px; }
   .header-title h1 { font-size: 16px; }
   .header-title p  { display: none; }
+
+  /* Mobile Dropdown Fixed Anchoring - Never squashed or pushed off-screen */
+  .dropdown-menu {
+    position: fixed;
+    top: 60px;
+    right: 12px;
+    left: 12px;
+    width: auto;
+    max-width: 380px;
+    margin-left: auto;
+    min-width: 0;
+    max-height: calc(100vh - 76px);
+    z-index: 1050;
+    border-radius: var(--radius-xl);
+    box-shadow: 0 20px 48px -4px rgba(15, 23, 42, 0.3), 0 8px 18px -2px rgba(15, 23, 42, 0.12);
+  }
+
+  .notification-dropdown {
+    width: auto;
+    min-width: 0;
+    max-width: 380px;
+  }
+
+  .profile-dropdown {
+    width: auto;
+    min-width: 0;
+    max-width: 280px;
+    right: 12px;
+    left: auto;
+  }
 }
 
 /* Skeleton styles */

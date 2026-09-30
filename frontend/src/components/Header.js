@@ -81,7 +81,7 @@ function Header({ onMenuToggle, title, subtitle, showBackButton, onBack, refresh
     }
   }, [refreshTrigger, fetchNotifications]);
 
-  // Handle clicks outside dropdowns
+  // Handle clicks outside dropdowns and Escape key
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (notificationRef.current && !notificationRef.current.contains(event.target)) {
@@ -92,8 +92,21 @@ function Header({ onMenuToggle, title, subtitle, showBackButton, onBack, refresh
       }
     };
 
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setShowNotifications(false);
+        setShowProfile(false);
+      }
+    };
+
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("touchstart", handleClickOutside, { passive: true });
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
   }, []);
 
   const formatTime = (date) => {
@@ -119,11 +132,33 @@ function Header({ onMenuToggle, title, subtitle, showBackButton, onBack, refresh
 
   const handleNotificationClick = (notification) => {
     setShowNotifications(false);
-    navigate("/dashboard");
+    if (window.location.pathname !== "/dashboard") {
+      navigate("/dashboard");
+    }
+    setTimeout(() => {
+      const element = document.getElementById(`med-card-${notification._id}`);
+      if (element) {
+        element.scrollIntoView({ behavior: "smooth", block: "center" });
+        element.classList.add("med-card-highlight");
+        setTimeout(() => element.classList.remove("med-card-highlight"), 2500);
+      }
+    }, 200);
   };
 
   return (
     <header className="header">
+      {/* Mobile backdrop for open dropdowns */}
+      {(showNotifications || showProfile) && (
+        <div 
+          className="dropdown-mobile-backdrop"
+          onClick={() => {
+            setShowNotifications(false);
+            setShowProfile(false);
+          }}
+          aria-hidden="true"
+        />
+      )}
+
       <div className="header-left">
         {/* Menu toggle for mobile */}
         <button 
@@ -174,7 +209,7 @@ function Header({ onMenuToggle, title, subtitle, showBackButton, onBack, refresh
         {/* Notifications */}
         <div className="header-dropdown" ref={notificationRef}>
           <button 
-            className={`btn btn-ghost btn-icon ${notifications.length > 0 ? 'has-notifications' : ''}`}
+            className={`header-icon-btn header-bell-btn ${notifications.length > 0 ? 'has-notifications' : ''}`}
             onClick={() => {
               setShowNotifications(!showNotifications);
               setShowProfile(false);
@@ -260,7 +295,7 @@ function Header({ onMenuToggle, title, subtitle, showBackButton, onBack, refresh
         {/* Profile menu */}
         <div className="header-dropdown" ref={profileRef}>
           <button 
-            className="profile-avatar"
+            className="header-icon-btn profile-avatar"
             onClick={() => {
               setShowProfile(!showProfile);
               setShowNotifications(false);
