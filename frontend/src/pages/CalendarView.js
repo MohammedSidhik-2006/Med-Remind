@@ -20,7 +20,42 @@ const spinKeyframes = `
 if (typeof document !== 'undefined' && !document.getElementById('calendar-spin-style')) {
   const styleElement = document.createElement('style');
   styleElement.id = 'calendar-spin-style';
-  styleElement.innerHTML = spinKeyframes;
+  styleElement.innerHTML = spinKeyframes + `
+  .calendar-page-wrapper {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 24px 24px;
+  }
+  .calendar-two-col {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 24px;
+    align-items: start;
+  }
+  .calendar-cell {
+    min-height: 48px;
+    padding: 8px 4px;
+  }
+  @media (max-width: 900px) {
+    .calendar-two-col {
+      grid-template-columns: 1fr;
+    }
+  }
+  @media (max-width: 576px) {
+    .calendar-page-wrapper {
+      padding: 16px 12px;
+    }
+    .calendar-cell {
+      min-height: 36px;
+      padding: 4px 2px;
+      font-size: 12px;
+    }
+    .calendar-day-header {
+      font-size: 10px;
+      padding: 4px 0;
+    }
+  }
+  `;
   document.head.appendChild(styleElement);
 }
 
@@ -116,11 +151,7 @@ function CalendarView() {
 
   return (
     <AppShell>
-      <div style={{
-        maxWidth: "1200px",
-        margin: "0 auto", 
-        padding: "var(--space-6)"
-      }}>
+      <div className="calendar-page-wrapper">
         {/* Page Header */}
         <div style={{ marginBottom: "var(--space-8)" }}>
           <Button 
@@ -140,12 +171,7 @@ function CalendarView() {
           </div>
         </div>
 
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 400px",
-          gap: "var(--space-6)",
-          alignItems: "start"
-        }}>
+        <div className="calendar-two-col">
           {/* Calendar Card */}
           <Card>
             <div style={{
@@ -204,10 +230,10 @@ function CalendarView() {
                 gap: "var(--space-1)",
                 marginBottom: "var(--space-4)"
               }}>
-                {["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(day => (
-                  <div key={day} style={{
+                {["Su","Mo","Tu","We","Th","Fr","Sa"].map(day => (
+                  <div key={day} className="calendar-day-header" style={{
                     textAlign: "center",
-                    padding: "var(--space-2) 0",
+                    padding: "8px 0",
                     fontSize: "12px",
                     fontWeight: "800",
                     color: "var(--text-muted)",
@@ -241,6 +267,7 @@ function CalendarView() {
                   return (
                     <div
                       key={day}
+                      className="calendar-cell"
                       onClick={() => setSelectedDate(new Date(year, month, day))}
                       style={{
                         position: "relative",
@@ -248,8 +275,6 @@ function CalendarView() {
                         flexDirection: "column",
                         alignItems: "center",
                         justifyContent: "center",
-                        minHeight: "48px",
-                        padding: "var(--space-2)",
                         borderRadius: "var(--radius-md)",
                         cursor: "pointer",
                         transition: "all var(--duration-normal) var(--ease)",

@@ -290,13 +290,40 @@
 
 @media (max-width: 768px) {
   .pageContainer {
-    padding: var(--space-4);
+    padding: var(--space-4) var(--space-4);
+  }
+
+  .pageHeader {
+    margin-bottom: var(--space-6);
   }
 
   .formGrid.gridCols2 {
     grid-template-columns: 1fr;
   }
 
+  .frequencyGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .timePeriodsGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .formActions {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .cardHeader {
+    padding: var(--space-4) var(--space-4) 0;
+  }
+
+  .cardContent {
+    padding: 0 var(--space-4) var(--space-4);
+  }
+}
+
+@media (max-width: 400px) {
   .frequencyGrid {
     grid-template-columns: 1fr;
   }

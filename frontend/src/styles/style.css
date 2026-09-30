@@ -676,6 +676,12 @@ body {
   box-shadow: var(--shadow-md) !important;
 }
 
+@media (max-width: 576px) {
+  .schedule-card, .schedule-section, .quick-actions-container {
+    padding: 16px;
+  }
+}
+
 .schedule-header {
   display: flex;
   justify-content: space-between;
@@ -1010,14 +1016,34 @@ body {
   backdrop-filter: blur(20px) saturate(180%) !important;
   -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
   border-bottom: 1px solid var(--border-glass) !important;
-  padding: 20px 48px;
+  padding: 16px 24px;
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 16px;
+  flex-wrap: nowrap;
   position: sticky;
   top: 0;
   z-index: 90;
   box-shadow: 0 8px 32px rgba(15, 23, 42, 0.04) !important;
+}
+
+@media (min-width: 769px) {
+  .page-header {
+    padding: 20px 48px;
+  }
+}
+
+@media (max-width: 576px) {
+  .page-header {
+    padding: 12px 16px;
+    gap: 12px;
+  }
+  .page-title {
+    font-size: 17px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }
 
 .back-btn {
@@ -1296,17 +1322,17 @@ tr:hover td {
   .dashboard-grid {
     grid-template-columns: 1fr;
   }
+  /* KEEP navbar as flex-row on mobile — do NOT stack */
   .navbar {
-    flex-direction: column;
-    gap: 16px;
-    padding: 20px 24px;
-    text-align: center;
+    flex-direction: row;
+    align-items: center;
+    padding: 10px 14px;
+    gap: 8px;
   }
   .navbar-user {
-    flex-wrap: wrap;
-    justify-content: center;
-    width: 100%;
-    gap: 12px;
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+    gap: 8px;
   }
   .dashboard-hero {
     flex-direction: column;
