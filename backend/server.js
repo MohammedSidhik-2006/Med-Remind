@@ -7,6 +7,7 @@ const authRoutes = require("./routes/authRoutes");
 const medicineRoutes = require("./routes/medicineRoutes");
 const adminRoutes = require("./routes/adminRoutes");
 const caregiverRoutes = require("./routes/caregiverRoutes");
+const aiRoutes = require("./routes/aiRoutes");
 const startReminder = require("./services/reminderService");
 const { sendPushToUser } = require("./services/pushService");
 const authMiddleware = require("./middleware/authMiddleware");
@@ -143,6 +144,9 @@ app.use("/admin", adminRoutes);
 
 app.use("/api/caregiver", caregiverRoutes);
 app.use("/caregiver", caregiverRoutes);
+
+app.use("/api/ai", aiRoutes);
+app.use("/ai", aiRoutes);
 
 // ── 404 ───────────────────────────────────────────────────────
 app.use((req, res) => res.status(404).json({ message: "Route not found" }));

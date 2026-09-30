@@ -5,6 +5,7 @@ const AuditLog = require("../models/AuditLog");
 const User     = require("../models/User");
 const CaregiverRelation = require("../models/CaregiverRelation");
 const { sendPushToUser } = require("../services/pushService");
+const { calculateReportMetrics } = require("../services/reportMetricsService");
 
 const getLocalDate = (d = new Date()) => {
   const tz = process.env.TZ || "Asia/Kolkata";
@@ -381,72 +382,15 @@ exports.resetTaken = async (req, res) => {
 
 exports.getReports = async (req, res) => {
   try {
-    const days   = req.query.period === "month" ? 30 : 7;
-    const userId = req.user.id;
-
-    const end   = new Date();
-    const start = new Date();
-    start.setDate(end.getDate() - (days - 1));
-
-    const dateRange = [];
-    for (let i = 0; i < days; i++) {
-      const d = new Date(start);
-      d.setDate(start.getDate() + i);
-      dateRange.push(getLocalDate(d));
-    }
-
-    const logs = await DoseLog.find({ userId, date: { $gte: dateRange[0], $lte: dateRange[dateRange.length - 1] } }).lean();
-
-    const dailyMap = {};
-    dateRange.forEach(d => { dailyMap[d] = { taken: 0, missed: 0, doseLogs: [] }; });
-    logs.forEach(log => {
-      if (dailyMap[log.date]) {
-        dailyMap[log.date][log.status]++;
-        dailyMap[log.date].doseLogs.push({
-          medicineName: log.medicineName,
-          dosage: log.dosage,
-          scheduledTime: log.scheduledTime,
-          status: log.status,
-          takenAt: log.takenAt
-        });
-      }
+    const metrics = await calculateReportMetrics(req.user.id, req.query.period);
+    res.json({
+      dailyData: metrics.dailyData,
+      totalTaken: metrics.totalTaken,
+      totalMissed: metrics.totalMissed,
+      overallAdherence: metrics.overallAdherence,
+      streak: metrics.streak,
+      period: metrics.period
     });
-
-    const dailyData = dateRange.map(date => {
-      const { taken, missed, doseLogs } = dailyMap[date];
-      const total = taken + missed;
-      return { date, taken, missed, total, adherence: total > 0 ? Math.round((taken / total) * 100) : null, doseLogs };
-    });
-
-    const totalTaken  = logs.filter(l => l.status === "taken").length;
-    const totalMissed = logs.filter(l => l.status === "missed").length;
-    const totalDoses  = totalTaken + totalMissed;
-
-    const allLogs = await DoseLog.find({ userId }).sort({ date: -1 }).lean();
-    const byDate  = {};
-    allLogs.forEach(l => {
-      if (!byDate[l.date]) byDate[l.date] = { taken: 0, missed: 0 };
-      byDate[l.date][l.status]++;
-    });
-
-    let streak    = 0;
-    let checkDate = new Date();
-    // If today has no taken doses yet (user hasn't had a chance to take them),
-    // don't penalise the streak — start checking from yesterday instead.
-    const todayStr  = getLocalDate(checkDate);
-    const todayData = byDate[todayStr];
-    if (!todayData || todayData.taken === 0) {
-      checkDate.setDate(checkDate.getDate() - 1);
-    }
-    for (let i = 0; i < 365; i++) {
-      const ds  = getLocalDate(checkDate);
-      const day = byDate[ds];
-      if (!day || day.taken === 0 || day.missed > 0) break;
-      streak++;
-      checkDate.setDate(checkDate.getDate() - 1);
-    }
-
-    res.json({ dailyData, totalTaken, totalMissed, overallAdherence: totalDoses > 0 ? Math.round((totalTaken / totalDoses) * 100) : 0, streak, period: req.query.period || "week" });
   } catch (error) {
     console.error("getReports:", error.message);
     res.status(500).json({ message: "Server error" });
