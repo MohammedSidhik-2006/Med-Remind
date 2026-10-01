@@ -184,35 +184,40 @@ function CaregiverLinking() {
                 <div style={{ 
                   display: "flex", 
                   alignItems: "center", 
-                  gap: "20px", 
+                  gap: "16px", 
                   background: "#f8fafc", 
-                  padding: "20px", 
+                  padding: "16px", 
                   borderRadius: "var(--radius-md)", 
-                  border: "1px solid var(--border-light)"
+                  border: "1px solid var(--border-light)",
+                  width: "100%",
+                  boxSizing: "border-box",
+                  minWidth: 0
                 }}>
                   <div style={{ 
                     fontSize: "20px", 
                     fontWeight: "800",
                     color: "var(--primary)",
-                    width: "56px", 
-                    height: "56px", 
+                    width: "52px", 
+                    height: "52px", 
                     background: "var(--primary-light)", 
                     borderRadius: "50%", 
                     display: "flex", 
                     alignItems: "center", 
                     justifyContent: "center",
-                    boxShadow: "var(--shadow-sm)"
+                    boxShadow: "var(--shadow-sm)",
+                    flexShrink: 0
                   }}>
                     {relation.caregiverId?.name ? relation.caregiverId.name.split(" ").filter(Boolean).map(w => w[0]).join("").toUpperCase().slice(0, 2) : "U"}
                   </div>
-                  <div>
-                    <div style={{ fontSize: "17px", fontWeight: "800", color: "var(--text-main)" }}>
+                  <div style={{ minWidth: 0, flex: 1, overflow: "hidden" }}>
+                    <div style={{ fontSize: "16px", fontWeight: "800", color: "var(--text-main)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {relation.caregiverId?.name}
                     </div>
-                    <div style={{ fontSize: "13px", color: "var(--text-light)", marginBottom: "6px", fontWeight: "500" }}>
+                    <div style={{ fontSize: "13px", color: "var(--text-light)", marginBottom: "6px", fontWeight: "500", wordBreak: "break-all", overflowWrap: "anywhere" }}>
                       {relation.caregiverId?.email}
                     </div>
                     <span style={{ 
+                      display: "inline-block",
                       background: "var(--primary-light)", 
                       color: "var(--primary)", 
                       padding: "4px 12px", 

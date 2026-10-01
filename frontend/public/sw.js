@@ -1,5 +1,5 @@
 // MedRemind Service Worker — Offline Support + Local Alarms + Background Push
-const CACHE_NAME = "medremind-v5";
+const CACHE_NAME = "medremind-v6";
 const DB_NAME = "MedRemindOfflineDB";
 const DB_VERSION = 1;
 
@@ -491,6 +491,20 @@ self.addEventListener("notificationclick", (event) => {
   // 1. User clicked "Take Now" directly from notification
   if (action === "take" && data.medicineId) {
     event.waitUntil((async () => {
+      // Broadcast to open tabs IMMEDIATELY for responsive, instantaneous UI update
+      try {
+        const clientList = await clients.matchAll({ type: "window", includeUncontrolled: true });
+        for (const client of clientList) {
+          client.postMessage({ 
+            type: "MEDICINE_TAKEN_OFFLINE", 
+            medicineId: data.medicineId,
+            scheduledTime: data.scheduledTime
+          });
+        }
+      } catch (bcErr) {
+        console.warn("[SW] Immediate broadcast error:", bcErr);
+      }
+
       try {
         const db = await openDatabase();
         const med = await getFromStore(db, "schedules", data.medicineId);
@@ -522,12 +536,6 @@ self.addEventListener("notificationclick", (event) => {
         vibrate: [100, 50, 100],
         data: { url: "/dashboard" }
       });
-
-      // Broadcast to open tabs
-      const clientList = await clients.matchAll({ type: "window", includeUncontrolled: true });
-      for (const client of clientList) {
-        client.postMessage({ type: "MEDICINE_TAKEN_OFFLINE", medicineId: data.medicineId });
-      }
     })());
     return;
   }

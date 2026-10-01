@@ -39,13 +39,15 @@ function Header({ onMenuToggle, title, subtitle, showBackButton, onBack, refresh
   const userName = user?.name || "User";
   const userRole = user?.role || "user";
   const userAvatar = user?.avatar || "👤";
-  const initials = userName
-    .split(" ")
-    .filter(Boolean)
-    .map(name => name[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
+  const initials = (
+    userName
+      .split(" ")
+      .filter(Boolean)
+      .map(name => name[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2)
+  ) || "U";
 
   // Update time every second
   useEffect(() => {

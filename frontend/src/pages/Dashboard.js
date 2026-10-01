@@ -187,9 +187,55 @@ function Dashboard() {
 
   // Listen for doses marked taken via Service Worker notifications while app is in background/offline
   useEffect(() => {
-    const handleOfflineDose = () => {
+    const handleOfflineDose = (event) => {
+      const takenMedId = event.detail?.medicineId;
+      const scheduledTime = event.detail?.scheduledTime;
+
+      // 1. Instant optimistic update so UI is immediately responsive
+      if (takenMedId) {
+        setMedicines((prevMeds) => {
+          if (!Array.isArray(prevMeds)) return prevMeds;
+          return prevMeds.map((m) => {
+            if (m._id === takenMedId) {
+              const updatedLogs = [...(m.todayLogs || [])];
+              if (scheduledTime) {
+                const idx = updatedLogs.findIndex((l) => l.scheduledTime === scheduledTime);
+                if (idx > -1) {
+                  updatedLogs[idx] = { ...updatedLogs[idx], status: "taken", takenAt: new Date().toISOString() };
+                } else {
+                  updatedLogs.push({ scheduledTime, status: "taken", takenAt: new Date().toISOString() });
+                }
+              }
+              const allTimes = m.times?.length > 0 ? m.times : (m.time ? [m.time] : []);
+              const newTakenCount = (m.takenTodayCount || 0) + 1;
+              const isFullyTaken = newTakenCount >= allTimes.length;
+              return {
+                ...m,
+                taken: isFullyTaken,
+                stock: Math.max(0, (m.stock || 0) - 1),
+                confirmationPending: false,
+                takenTodayCount: newTakenCount,
+                todayLogs: updatedLogs
+              };
+            }
+            return m;
+          });
+        });
+
+        // Optimistically increment taken count and decrement pending in stats
+        setStats((prevStats) => ({
+          ...prevStats,
+          taken: prevStats.taken + 1,
+          pending: Math.max(0, prevStats.pending - 1)
+        }));
+      }
+
+      // 2. Fetch authoritative server state immediately, and re-check after brief interval
       fetchDashboardData(false);
+      const timer = setTimeout(() => fetchDashboardData(false), 1500);
+      return () => clearTimeout(timer);
     };
+
     window.addEventListener("medremind-dose-taken-offline", handleOfflineDose);
     return () => window.removeEventListener("medremind-dose-taken-offline", handleOfflineDose);
   }, [fetchDashboardData]);
@@ -406,7 +452,20 @@ function Dashboard() {
             {/* Today's progress */}
             <Card className="progress-card mb-6">
               <Card.Header>
-                <h3 className="text-lg font-semibold text-primary">Today's Progress</h3>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
+                  <h3 className="text-lg font-semibold text-primary" style={{ margin: 0 }}>Today's Progress</h3>
+                  <span style={{ 
+                    fontSize: "12px", 
+                    fontWeight: "800", 
+                    color: "var(--primary)", 
+                    background: "var(--primary-light)", 
+                    padding: "4px 10px", 
+                    borderRadius: "12px",
+                    letterSpacing: "0.2px"
+                  }}>
+                    {stats.total > 0 ? `${Math.round(dailyProgress)}% Completed` : "No Doses Scheduled"}
+                  </span>
+                </div>
               </Card.Header>
               <Card.Body>
                 <ProgressBar.Adherence
@@ -416,10 +475,16 @@ function Dashboard() {
                 />
                 
                 <div className="progress-breakdown mt-4">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-success">✓ Taken: {stats.taken}</span>
-                    <span className="text-warning">⏳ Pending: {stats.pending}</span>
-                    <span className="text-danger">✗ Missed: {stats.missed}</span>
+                  <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: "8px", fontSize: "13px" }}>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "6px 12px", borderRadius: "8px", background: "var(--success-light)", color: "var(--success)", fontWeight: "700" }}>
+                      ✓ Taken: {stats.taken}
+                    </span>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "6px 12px", borderRadius: "8px", background: "var(--warning-light)", color: "var(--warning)", fontWeight: "700" }}>
+                      ⏳ Pending: {stats.pending}
+                    </span>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "6px 12px", borderRadius: "8px", background: "var(--danger-light)", color: "var(--danger)", fontWeight: "700" }}>
+                      ✗ Missed: {stats.missed}
+                    </span>
                   </div>
                 </div>
               </Card.Body>

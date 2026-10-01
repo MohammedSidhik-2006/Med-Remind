@@ -1,8 +1,44 @@
 const { GoogleGenAI } = require("@google/genai");
 const { calculateReportMetrics } = require("./reportMetricsService");
 
-const PRIMARY_MODEL = process.env.GEMINI_MODEL || "gemini-flash-latest";
-const FALLBACK_MODEL = "gemini-flash-lite-latest";
+const MODEL_CANDIDATES = [
+  process.env.GEMINI_MODEL,
+  "gemini-flash-lite-latest",
+  "gemini-3.1-flash-lite",
+  "gemini-3.5-flash-lite",
+  "gemini-flash-latest"
+].filter(Boolean);
+
+/**
+ * Resilient multi-model executor: tries high-quota candidates sequentially.
+ * Prevents 429 quota exhaustion or single-model outages from failing requests.
+ */
+async function executeModelCascade(ai, prompt, logTag = "AI Service") {
+  let lastError = null;
+  for (const model of MODEL_CANDIDATES) {
+    try {
+      const res = await ai.models.generateContent({
+        model,
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+          temperature: 0.2
+        }
+      });
+      if (res && res.text) {
+        return res.text;
+      }
+    } catch (err) {
+      console.warn(`[${logTag}] Model (${model}) attempt note: ${err.message?.slice(0, 100)}. Falling back to next candidate...`);
+      lastError = err;
+    }
+  }
+  console.error(`[${logTag}] All candidate models failed.`);
+  const finalErr = new Error(lastError?.message || "Gemini service unavailable");
+  finalErr.status = lastError?.status || 503;
+  throw finalErr;
+}
+
 
 /**
  * Maps HH:MM time strings into standard day phases
@@ -194,35 +230,7 @@ REQUIRED JSON SCHEMA:
 `;
 
   const ai = new GoogleGenAI({ apiKey });
-
-  const callModel = async (modelName) => {
-    return await ai.models.generateContent({
-      model: modelName,
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        temperature: 0.2
-      }
-    });
-  };
-
-  let responseText = null;
-
-  try {
-    const res = await callModel(PRIMARY_MODEL);
-    responseText = res.text;
-  } catch (primaryErr) {
-    console.warn(`[AI Service] Primary model (${PRIMARY_MODEL}) failed: ${primaryErr.message}. Attempting fallback model (${FALLBACK_MODEL})...`);
-    try {
-      const fallbackRes = await callModel(FALLBACK_MODEL);
-      responseText = fallbackRes.text;
-    } catch (fallbackErr) {
-      console.error("[AI Service] Fallback model also failed:", fallbackErr.message);
-      const err = new Error(primaryErr.message || "Gemini service unavailable");
-      err.status = primaryErr.status || 503;
-      throw err;
-    }
-  }
+  const responseText = await executeModelCascade(ai, prompt, "AI Report Service");
 
   try {
     const parsed = JSON.parse(responseText);
@@ -347,35 +355,7 @@ REQUIRED JSON SCHEMA:
 `;
 
   const ai = new GoogleGenAI({ apiKey });
-
-  const callModel = async (modelName) => {
-    return await ai.models.generateContent({
-      model: modelName,
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        temperature: 0.2
-      }
-    });
-  };
-
-  let responseText = null;
-
-  try {
-    const res = await callModel(PRIMARY_MODEL);
-    responseText = res.text;
-  } catch (primaryErr) {
-    console.warn(`[AI Caregiver Service] Primary model (${PRIMARY_MODEL}) failed: ${primaryErr.message}. Attempting fallback model (${FALLBACK_MODEL})...`);
-    try {
-      const fallbackRes = await callModel(FALLBACK_MODEL);
-      responseText = fallbackRes.text;
-    } catch (fallbackErr) {
-      console.error("[AI Caregiver Service] Fallback model also failed:", fallbackErr.message);
-      const err = new Error(primaryErr.message || "Gemini service unavailable");
-      err.status = primaryErr.status || 503;
-      throw err;
-    }
-  }
+  const responseText = await executeModelCascade(ai, prompt, "AI Caregiver Service");
 
   try {
     const parsed = JSON.parse(responseText);

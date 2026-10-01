@@ -1,4 +1,4 @@
-﻿/* Dashboard Styles */
+/* Dashboard Styles */
 
 .dashboard-container {
   max-width: 1200px;
@@ -30,10 +30,20 @@
 }
 
 .stat-card {
-  padding: var(--space-5);
+  padding: 20px 22px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  border: 1px solid rgba(13, 148, 136, 0.09) !important;
+  border-radius: var(--radius-lg) !important;
+  background: white !important;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04) !important;
+  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.22s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px -4px rgba(13, 148, 136, 0.12) !important;
 }
 
 .stat-content {
@@ -41,18 +51,26 @@
 }
 
 .stat-value {
-  line-height: 1;
-  margin-bottom: var(--space-1);
+  font-size: 28px !important;
+  font-weight: 800 !important;
+  line-height: 1.1;
+  margin-bottom: 4px;
+  letter-spacing: -0.5px;
 }
 
 .stat-icon {
   width: 48px;
   height: 48px;
-  border-radius: var(--radius-md);
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.stat-card:hover .stat-icon {
+  transform: scale(1.08);
 }
 
 .main-grid {

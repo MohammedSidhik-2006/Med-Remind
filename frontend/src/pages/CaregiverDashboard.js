@@ -279,14 +279,14 @@ function CaregiverDashboard() {
                         <div style={{ fontSize: "20px", fontWeight: "800", color: "var(--primary)", width: "64px", height: "64px", background: "var(--primary-light)", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "var(--shadow-sm)", flexShrink: 0 }}>
                           {patientData.patient?.name ? patientData.patient.name.split(" ").filter(Boolean).map(w => w[0]).join("").toUpperCase().slice(0, 2) : "U"}
                         </div>
-                        <div>
-                          <h2 style={{ fontSize: "20px", fontWeight: "800", color: "var(--text-main)", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                        <div style={{ minWidth: 0, flex: 1, overflow: "hidden" }}>
+                          <h2 style={{ fontSize: "20px", fontWeight: "800", color: "var(--text-main)", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", margin: "0 0 4px 0" }}>
                             {patientData.patient?.name}
                             <span style={{ fontSize: "11px", background: "var(--success-light)", color: "var(--success)", padding: "4px 12px", borderRadius: "20px", fontWeight: "800", textTransform: "uppercase", letterSpacing: "0.5px" }}>
                               {patientData.patient?.relationshipLabel}
                             </span>
                           </h2>
-                          <div style={{ fontSize: "13px", color: "var(--text-light)", fontWeight: "500", marginTop: "2px" }}>
+                          <div style={{ fontSize: "13px", color: "var(--text-light)", fontWeight: "500", wordBreak: "break-all", overflowWrap: "anywhere" }}>
                             {patientData.patient?.email}
                           </div>
                         </div>

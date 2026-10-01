@@ -111,7 +111,8 @@ function Reports() {
       setAiInsights(res?.data || null);
     } catch (err) {
       console.error("AI Insights error:", err?.response?.data?.message || err.message);
-      setAiError("Unable to generate insights right now.");
+      const msg = err.response?.data?.message || "Unable to generate insights right now.";
+      setAiError(msg);
     } finally {
       aiLoadingRef.current = false;
       setAiLoading(false);

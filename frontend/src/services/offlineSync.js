@@ -42,6 +42,21 @@ const urlBase64ToUint8Array = (base64String) => {
   return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
 };
 
+// Global listener for SW events (e.g. dose taken from OS notification while tab was backgrounded)
+if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+  navigator.serviceWorker.addEventListener("message", (event) => {
+    if (event.data?.type === "MEDICINE_TAKEN_OFFLINE") {
+      window.dispatchEvent(new CustomEvent("medremind-dose-taken-offline", { 
+        detail: { 
+          medicineId: event.data.medicineId,
+          scheduledTime: event.data.scheduledTime 
+        }
+      }));
+    }
+  });
+}
+
+
 /**
  * Sync active medication schedules to both IndexedDB and the active Service Worker.
  * Ensures the Service Worker has complete offline awareness of all dose schedules.

@@ -230,7 +230,7 @@ function MedicineList({ medicines, setMedicines, loading, refreshMedicines, navi
       await refreshMedicines();
       
       // Show success message only if not an idempotent duplicate
-      if (!response.data.alreadyTaken) {
+      if (!response?.data?.alreadyTaken) {
         // Success - dose recorded (no toast shown to keep UI clean, but you can add one here if needed)
       }
     } catch (err) {

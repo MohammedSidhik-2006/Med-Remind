@@ -17,10 +17,49 @@ const FREQ_LABELS = {
 };
 
 const TIME_PERIODS = [
-  { key: "morning",   label: "Morning",   icon: "🌅", hint: "05:00–11:59" },
-  { key: "afternoon", label: "Afternoon", icon: "☀️", hint: "12:00–16:59" },
-  { key: "evening",   label: "Evening",   icon: "🌇", hint: "17:00–20:59" },
-  { key: "night",     label: "Night",     icon: "🌙", hint: "21:00–04:59" }
+  { 
+    key: "morning",   
+    label: "Morning",   
+    hint: "05:00–11:59",
+    renderIcon: (active) => (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: active ? "var(--primary)" : "#f59e0b" }}>
+        <path d="M12 2v4M4.93 10.93l2.83-2.83M2 18h20M20 18a8 8 0 0 0-16 0"/>
+        <path d="M12 10a4 4 0 0 1 4 4"/>
+      </svg>
+    )
+  },
+  { 
+    key: "afternoon", 
+    label: "Afternoon", 
+    hint: "12:00–16:59",
+    renderIcon: (active) => (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: active ? "var(--primary)" : "#0d9488" }}>
+        <circle cx="12" cy="12" r="4"/>
+        <path d="M12 2v2M12 20v2m-7.07-14.93 1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2m-14.93 7.07 1.41-1.41m11.32-11.32 1.41-1.41"/>
+      </svg>
+    )
+  },
+  { 
+    key: "evening",   
+    label: "Evening",   
+    hint: "17:00–20:59",
+    renderIcon: (active) => (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: active ? "var(--primary)" : "#6366f1" }}>
+        <path d="M12 10v4M4.93 10.93l2.83-2.83M2 18h20M20 18a8 8 0 0 0-16 0"/>
+        <path d="m16 14-4 4-4-4"/>
+      </svg>
+    )
+  },
+  { 
+    key: "night",     
+    label: "Night",     
+    hint: "21:00–04:59",
+    renderIcon: (active) => (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: active ? "var(--primary)" : "#475569" }}>
+        <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
+      </svg>
+    )
+  }
 ];
 
 // compute today's date in local time (not UTC)
@@ -172,10 +211,9 @@ function AddMedicinePage() {
                         onChange={(e) => setName(e.target.value)}
                         required
                         icon={
-                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <rect width="7" height="18" x="3" y="3" rx="1"/>
-                            <rect width="7" height="7" x="14" y="3" rx="1"/>
-                            <rect width="7" height="7" x="14" y="14" rx="1"/>
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z"/>
+                            <path d="m8.5 8.5 7 7"/>
                           </svg>
                         }
                       />
@@ -189,10 +227,9 @@ function AddMedicinePage() {
                         onChange={(e) => setDosage(e.target.value)}
                         required
                         icon={
-                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M9 12h6"/>
-                            <path d="M12 9v6"/>
-                            <circle cx="12" cy="12" r="10"/>
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="9"/>
+                            <line x1="8" y1="12" x2="16" y2="12"/>
                           </svg>
                         }
                       />
@@ -231,25 +268,28 @@ function AddMedicinePage() {
                   <h3 className={styles.formSectionTitle}>Time Periods</h3>
                   <p className={styles.formSectionSubtitle}>Select when you typically take this medication</p>
                   <div className={styles.timePeriodsGrid}>
-                    {TIME_PERIODS.map(({ key, label, icon, hint }) => (
-                      <button
-                        key={key}
-                        type="button"
-                        onClick={() => togglePeriod(key)}
-                        className={`${styles.timePeriodCard} ${timePeriods.includes(key) ? styles.selected : ''}`}
-                      >
-                        <span className={styles.timePeriodIcon}>{icon}</span>
-                        <span className={styles.timePeriodLabel}>{label}</span>
-                        <span className={styles.timePeriodHint}>{hint}</span>
-                        {timePeriods.includes(key) && (
-                          <div className={styles.timePeriodSelectedIndicator}>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                              <polyline points="20,6 9,17 4,12"/>
-                            </svg>
-                          </div>
-                        )}
-                      </button>
-                    ))}
+                    {TIME_PERIODS.map(({ key, label, renderIcon, hint }) => {
+                      const isSelected = timePeriods.includes(key);
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => togglePeriod(key)}
+                          className={`${styles.timePeriodCard} ${isSelected ? styles.selected : ''}`}
+                        >
+                          <span className={styles.timePeriodIcon}>{renderIcon(isSelected)}</span>
+                          <span className={styles.timePeriodLabel}>{label}</span>
+                          <span className={styles.timePeriodHint}>{hint}</span>
+                          {isSelected && (
+                            <div className={styles.timePeriodSelectedIndicator}>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                <polyline points="20,6 9,17 4,12"/>
+                              </svg>
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
