@@ -125,7 +125,7 @@ function HistoryLog() {
                   <Badge 
                     variant={
                       adherence >= 80 ? "success" :
-                      adherence >= 50 ? "warning" : "error"
+                      adherence >= 50 ? "warning" : "danger"
                     }
                     size="lg"
                   >
@@ -139,9 +139,8 @@ function HistoryLog() {
                   max={100}
                   variant={
                     adherence >= 80 ? "success" :
-                    adherence >= 50 ? "warning" : "error"
+                    adherence >= 50 ? "warning" : "danger"
                   }
-                  showPercentage={false}
                 />
                 <div className="adherence-description">
                   <p>

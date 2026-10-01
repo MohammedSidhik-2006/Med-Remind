@@ -1,5 +1,5 @@
 // MedRemind Service Worker — Offline Support + Local Alarms + Background Push
-const CACHE_NAME = "medremind-v4";
+const CACHE_NAME = "medremind-v5";
 const DB_NAME = "MedRemindOfflineDB";
 const DB_VERSION = 1;
 
@@ -258,9 +258,14 @@ async function flushOfflineQueue() {
     const token = tokenSetting?.value;
     if (!token) return;
 
+    // Use stored backend API base URL so requests go to the correct server
+    // (not the frontend origin which has no API routes)
+    const apiSetting = await getFromStore(db, "settings", "apiBaseUrl");
+    const apiBase = (apiSetting?.value || "https://medi-time-2peh.onrender.com").replace(/\/+$/, "");
+
     for (const item of queue) {
       try {
-        const res = await fetch(`/medicine/taken/${item.medicineId}`, {
+        const res = await fetch(`${apiBase}/api/medicine/taken/${item.medicineId}`, {
           method: "PATCH",
           headers: {
             "Content-Type": "application/json",
@@ -333,15 +338,28 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Navigation requests: network first, fallback to /index.html
+  // Navigation requests (page loads): try network first, fall back to cached
+  // /index.html so the React SPA can handle the route client-side.
+  // IMPORTANT: always return a valid Response — never let the promise resolve
+  // to undefined, which causes 'Failed to convert value to Response' crashes.
   if (request.mode === "navigate") {
     event.respondWith(
-      fetch(request).catch(() => caches.match("/index.html"))
+      fetch(request)
+        .catch(() =>
+          caches.match("/index.html").then(
+            (cached) =>
+              cached ||
+              new Response(
+                '<!DOCTYPE html><html><head><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=/"></head><body></body></html>',
+                { status: 200, headers: { "Content-Type": "text/html; charset=utf-8" } }
+              )
+          )
+        )
     );
     return;
   }
 
-  // Static assets: cache first, fallback to network
+  // Static assets: cache-first, then network, always resolve with a Response
   event.respondWith(
     caches.match(request).then((cached) => {
       if (cached) return cached;
@@ -358,7 +376,12 @@ self.addEventListener("fetch", (event) => {
           }
           return response;
         })
-        .catch(() => caches.match(request));
+        .catch(() =>
+          // Return a valid empty response so event.respondWith never gets undefined
+          caches.match(request).then(
+            (fallback) => fallback || new Response("", { status: 408, statusText: "Offline" })
+          )
+        );
     })
   );
 });
@@ -418,11 +441,21 @@ self.addEventListener("message", (event) => {
   if (!event.data) return;
 
   if (event.data.type === "SYNC_SCHEDULES") {
-    const { medicines, token } = event.data;
+    const { medicines, token, apiBaseUrl } = event.data;
     event.waitUntil((async () => {
       try {
         const db = await openDatabase();
         if (Array.isArray(medicines)) {
+          // CLEAR old schedules first to ensure user isolation:
+          // If a different user logged in, their predecessor's medicines
+          // must NOT trigger notifications for the new user.
+          try {
+            const tx = db.transaction("schedules", "readwrite");
+            tx.objectStore("schedules").clear();
+            await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = rej; });
+          } catch (clearErr) {
+            console.warn("[SW] Could not clear old schedules:", clearErr);
+          }
           for (const med of medicines) {
             if (med && med._id) {
               await putInStore(db, "schedules", med);
@@ -432,6 +465,9 @@ self.addEventListener("message", (event) => {
         }
         if (token) {
           await putInStore(db, "settings", { key: "authToken", value: token });
+        }
+        if (apiBaseUrl) {
+          await putInStore(db, "settings", { key: "apiBaseUrl", value: apiBaseUrl });
         }
         startAlarmHeartbeat();
       } catch (err) {

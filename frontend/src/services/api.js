@@ -55,7 +55,9 @@ API.interceptors.response.use(
         if (typeof window !== "undefined") {
           const path = window.location.pathname;
           if (path !== "/" && path !== "/register" && path !== "/forgot-password") {
-            window.location.href = "/";
+            // Dispatch a custom event so the SessionGuard in App.js can
+            // navigate via React Router without triggering a full page reload.
+            window.dispatchEvent(new CustomEvent("medremind-session-expired"));
           }
         }
       }

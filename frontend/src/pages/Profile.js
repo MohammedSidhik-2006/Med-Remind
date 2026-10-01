@@ -5,6 +5,7 @@ import Sidebar from "../components/Sidebar";
 import Footer from "../components/Footer";
 import API from "../services/api";
 import { setupPushNotifications, isPushSubscribed, unsubscribePush } from "../services/notifications";
+import { clearOfflineStorage } from "../services/offlineSync";
 
 function Modal({ title, message, icon, onConfirm, onCancel, confirmText = "OK", showCancel = false, confirmClass }) {
   return (
@@ -130,7 +131,8 @@ function Profile() {
     setShowLogoutConfirm(true);
   };
 
-  const handleLogoutConfirm = () => {
+  const handleLogoutConfirm = async () => {
+    await clearOfflineStorage();
     localStorage.removeItem("token");
     navigate("/");
   };

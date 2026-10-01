@@ -1,9 +1,9 @@
 import React, { lazy, Suspense, useEffect } from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useNavigate } from "react-router-dom";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ToastProvider } from "./components/Toast";
 import LoadingSpinner from "./components/LoadingSpinner";
-import { initOfflineNotifications } from "./services/offlineSync";
+import { initOfflineNotifications, clearOfflineStorage } from "./services/offlineSync";
 
 // Import design system
 import "./styles/design-system.css";
@@ -25,6 +25,25 @@ const CaregiverLinking = lazy(() => import("./pages/CaregiverLinking"));
 const CaregiverDashboard = lazy(() => import("./pages/CaregiverDashboard"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
+/**
+ * SessionGuard — Listens for the "medremind-session-expired" custom event
+ * dispatched by the API interceptor (api.js) when a 401 response is received
+ * on any protected route. Uses React Router's navigate() so the app NEVER
+ * triggers a full browser page reload when a session expires.
+ */
+function SessionGuard() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    const handleSessionExpired = async () => {
+      await clearOfflineStorage();
+      navigate("/", { replace: true });
+    };
+    window.addEventListener("medremind-session-expired", handleSessionExpired);
+    return () => window.removeEventListener("medremind-session-expired", handleSessionExpired);
+  }, [navigate]);
+  return null;
+}
+
 function App() {
   useEffect(() => {
     initOfflineNotifications();
@@ -34,6 +53,7 @@ function App() {
     <ErrorBoundary>
       <ToastProvider>
         <BrowserRouter>
+          <SessionGuard />
           <Suspense fallback={<LoadingSpinner />}>
             <Routes>
               <Route path="/" element={<Login />} />

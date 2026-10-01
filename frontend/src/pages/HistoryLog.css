@@ -162,6 +162,10 @@
   flex: 1;
 }
 
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 .loading-state {
   display: flex;
   flex-direction: column;
@@ -169,6 +173,11 @@
   gap: var(--space-4);
   padding: var(--space-8);
   color: var(--text-secondary);
+}
+
+.loading-spinner svg {
+  animation: spin 1.2s linear infinite;
+  color: var(--primary);
 }
 
 .empty-state {

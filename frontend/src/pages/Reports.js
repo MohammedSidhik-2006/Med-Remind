@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import Sidebar from "../components/Sidebar";
@@ -96,6 +96,27 @@ function Reports() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [aiInsights, setAiInsights] = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState(null);
+  const aiLoadingRef = useRef(false);
+
+  const handleGenerateInsights = async () => {
+    if (aiLoadingRef.current || aiLoading) return;
+    aiLoadingRef.current = true;
+    setAiLoading(true);
+    setAiError(null);
+    try {
+      const res = await API.get(`/ai/report-insights?period=${period}`);
+      setAiInsights(res?.data || null);
+    } catch (err) {
+      console.error("AI Insights error:", err?.response?.data?.message || err.message);
+      setAiError("Unable to generate insights right now.");
+    } finally {
+      aiLoadingRef.current = false;
+      setAiLoading(false);
+    }
+  };
 
   // Auth guard
   useEffect(() => {
@@ -159,7 +180,13 @@ function Reports() {
             border: "1px solid var(--border-light)"
           }}>
             {["week", "month"].map(p => (
-              <button key={p} onClick={() => setPeriod(p)} style={{
+              <button key={p} onClick={() => {
+                if (period !== p) {
+                  setPeriod(p);
+                  setAiInsights(null);
+                  setAiError(null);
+                }
+              }} style={{
                 padding: "10px 24px", border: "none", borderRadius: "10px", cursor: "pointer",
                 fontWeight: "700", fontSize: "13px", transition: "var(--transition-smooth)",
                 background: period === p ? "var(--primary)" : "transparent",
@@ -223,6 +250,229 @@ function Reports() {
                   </p>
                 </div>
               </div>
+
+              {/* AI Insights Section */}
+              <section
+                aria-labelledby="ai-insights-heading"
+                className="schedule-card"
+                style={{
+                  marginBottom: "24px",
+                  border: "1px solid var(--border-light)",
+                  padding: "20px 24px",
+                  background: "white",
+                  borderRadius: "var(--radius-md)"
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px", flexWrap: "wrap", gap: "10px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <span style={{ fontSize: "18px" }} aria-hidden="true">✨</span>
+                    <h3 id="ai-insights-heading" style={{ color: "var(--text-main)", fontSize: "16px", fontWeight: "800", margin: 0 }}>
+                      AI Report Insights
+                    </h3>
+                  </div>
+                  {aiInsights && !aiLoading && (
+                    <button
+                      type="button"
+                      onClick={handleGenerateInsights}
+                      disabled={aiLoading}
+                      aria-label="Refresh AI Insights"
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        background: "transparent",
+                        color: "var(--primary)",
+                        border: "1px solid var(--border-light)",
+                        borderRadius: "var(--radius-sm)",
+                        padding: "6px 12px",
+                        fontSize: "12px",
+                        fontWeight: "700",
+                        cursor: "pointer",
+                        transition: "var(--transition-smooth)"
+                      }}
+                    >
+                      🔄 Refresh Insights
+                    </button>
+                  )}
+                </div>
+
+                {/* State: Loading */}
+                {aiLoading && (
+                  <div style={{ textAlign: "center", padding: "28px 16px", color: "var(--text-muted)" }}>
+                    <svg
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="3"
+                      style={{ animation: "spin 1s linear infinite", marginBottom: "10px", display: "inline-block", color: "var(--primary)" }}
+                      aria-hidden="true"
+                    >
+                      <circle cx="12" cy="12" r="10" stroke="rgba(0,0,0,0.1)" strokeWidth="3" />
+                      <path d="M12 2a10 10 0 0 1 10 10" stroke="var(--primary)" strokeWidth="3" />
+                    </svg>
+                    <div style={{ fontSize: "13px", fontWeight: "600" }}>Analyzing your medication tracking data...</div>
+                  </div>
+                )}
+
+                {/* State: Error */}
+                {!aiLoading && aiError && (
+                  <div style={{ padding: "14px 16px", background: "#fef2f2", borderRadius: "var(--radius-sm)", border: "1px solid #fecaca" }}>
+                    <p style={{ margin: "0 0 10px 0", fontSize: "13px", color: "var(--danger)", fontWeight: "600" }}>
+                      Unable to generate insights right now.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleGenerateInsights}
+                      disabled={aiLoading}
+                      style={{
+                        background: "white",
+                        color: "var(--danger)",
+                        border: "1px solid var(--danger)",
+                        borderRadius: "var(--radius-sm)",
+                        padding: "6px 14px",
+                        fontSize: "12px",
+                        fontWeight: "700",
+                        cursor: "pointer"
+                      }}
+                    >
+                      Try Again
+                    </button>
+                  </div>
+                )}
+
+                {/* State: Initial Prompt */}
+                {!aiLoading && !aiError && !aiInsights && (
+                  <div>
+                    <p style={{ fontSize: "13px", color: "var(--text-muted)", margin: "0 0 16px 0", lineHeight: "1.5" }}>
+                      Generate an AI-powered explanation of your medication tracking data.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleGenerateInsights}
+                      disabled={aiLoading}
+                      aria-label="Generate AI Insights"
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "8px",
+                        background: "var(--primary)",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "var(--radius-md)",
+                        padding: "10px 20px",
+                        fontSize: "13px",
+                        fontWeight: "700",
+                        cursor: "pointer",
+                        boxShadow: "var(--shadow-sm)",
+                        transition: "var(--transition-smooth)"
+                      }}
+                    >
+                      ✨ Generate Insights
+                    </button>
+                  </div>
+                )}
+
+                {/* State: Insufficient Data */}
+                {!aiLoading && !aiError && aiInsights?.isInsufficientData && (
+                  <div style={{ padding: "14px 16px", background: "#f8fafc", borderRadius: "var(--radius-sm)", border: "1px solid var(--border-light)" }}>
+                    <p style={{ margin: "0 0 6px 0", fontSize: "14px", fontWeight: "700", color: "var(--text-main)" }}>
+                      Not enough medication history yet.
+                    </p>
+                    <p style={{ margin: 0, fontSize: "13px", color: "var(--text-muted)", lineHeight: "1.5" }}>
+                      Continue tracking your medications to generate meaningful insights.
+                    </p>
+                    {aiInsights.disclaimer && (
+                      <div style={{ fontSize: "11px", color: "var(--text-light)", marginTop: "12px", borderTop: "1px solid var(--border-light)", paddingTop: "8px", fontStyle: "italic" }}>
+                        {aiInsights.disclaimer}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* State: Successful Insights */}
+                {!aiLoading && !aiError && aiInsights && !aiInsights.isInsufficientData && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                    {/* Summary */}
+                    {aiInsights.summary && (
+                      <div style={{
+                        background: "#f8fafc",
+                        padding: "12px 16px",
+                        borderRadius: "var(--radius-sm)",
+                        borderLeft: "4px solid var(--primary)",
+                        borderTop: "1px solid var(--border-light)",
+                        borderRight: "1px solid var(--border-light)",
+                        borderBottom: "1px solid var(--border-light)"
+                      }}>
+                        <div style={{ fontSize: "11px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "4px" }}>
+                          Summary
+                        </div>
+                        <p style={{ margin: 0, fontSize: "13px", color: "var(--text-main)", lineHeight: "1.5", fontWeight: "500", wordBreak: "break-word" }}>
+                          {aiInsights.summary}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Positive Observation */}
+                    {aiInsights.positiveObservation && (
+                      <div style={{
+                        background: "rgba(16, 185, 129, 0.08)",
+                        padding: "10px 14px",
+                        borderRadius: "var(--radius-sm)",
+                        border: "1px solid rgba(16, 185, 129, 0.25)",
+                        display: "flex",
+                        alignItems: "flex-start",
+                        gap: "8px"
+                      }}>
+                        <span style={{ color: "var(--success)", fontWeight: "bold", fontSize: "14px", lineHeight: "1.4" }}>✓</span>
+                        <p style={{ margin: 0, fontSize: "13px", color: "var(--text-main)", lineHeight: "1.5", wordBreak: "break-word" }}>
+                          {aiInsights.positiveObservation}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Observed Patterns */}
+                    {Array.isArray(aiInsights.patterns) && aiInsights.patterns.length > 0 && (
+                      <div>
+                        <div style={{ fontSize: "12px", fontWeight: "700", color: "var(--text-main)", marginBottom: "6px" }}>
+                          Observed Patterns
+                        </div>
+                        <ul style={{ margin: 0, paddingLeft: "18px", fontSize: "13px", color: "var(--text-muted)", lineHeight: "1.6" }}>
+                          {aiInsights.patterns.map((item, idx) => (
+                            <li key={idx} style={{ marginBottom: "4px", wordBreak: "break-word" }}>
+                              {item}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Attention Items */}
+                    {Array.isArray(aiInsights.attentionItems) && aiInsights.attentionItems.length > 0 && (
+                      <div>
+                        <div style={{ fontSize: "12px", fontWeight: "700", color: "var(--text-main)", marginBottom: "6px" }}>
+                          Attention Areas
+                        </div>
+                        <ul style={{ margin: 0, paddingLeft: "18px", fontSize: "13px", color: "var(--text-muted)", lineHeight: "1.6" }}>
+                          {aiInsights.attentionItems.map((item, idx) => (
+                            <li key={idx} style={{ marginBottom: "4px", wordBreak: "break-word" }}>
+                              {item}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Disclaimer */}
+                    {aiInsights.disclaimer && (
+                      <div style={{ fontSize: "11px", color: "var(--text-light)", marginTop: "4px", borderTop: "1px solid var(--border-light)", paddingTop: "8px", fontStyle: "italic" }}>
+                        {aiInsights.disclaimer}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </section>
 
               {/* Adherence Rate Line Chart */}
               <div className="schedule-card" style={{ marginBottom: "24px" }}>

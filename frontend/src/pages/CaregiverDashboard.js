@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import Sidebar from "../components/Sidebar";
@@ -14,6 +14,63 @@ function CaregiverDashboard() {
   const [loadingDashboard, setLoadingDashboard] = useState(false);
   const [error, setError] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // AI Caregiver Summary states
+  const [aiSummary, setAiSummary] = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState(null);
+  const [aiPeriod, setAiPeriod] = useState("week");
+  const aiLoadingRef = useRef(false);
+  const activeAiRequestIdRef = useRef(0);
+
+  // Clear AI summary immediately on patient change to prevent stale data cross-over
+  useEffect(() => {
+    activeAiRequestIdRef.current++;
+    setAiSummary(null);
+    setAiError(null);
+    setAiLoading(false);
+    aiLoadingRef.current = false;
+  }, [selectedPatientId]);
+
+  const handlePeriodChange = (newPeriod) => {
+    if (newPeriod === aiPeriod) return;
+    setAiPeriod(newPeriod);
+    setAiSummary(null);
+    setAiError(null);
+  };
+
+  const handleGenerateSummary = async () => {
+    // Synchronous guard against rapid clicks
+    if (aiLoadingRef.current) return;
+    if (!selectedPatientId) return;
+
+    aiLoadingRef.current = true;
+    setAiLoading(true);
+    setAiError(null);
+
+    const currentReqId = ++activeAiRequestIdRef.current;
+    const currentPatientId = selectedPatientId;
+
+    try {
+      const res = await API.get(`/ai/caregiver-summary/${currentPatientId}?period=${aiPeriod}`);
+      // Race guard: If patient switched or another request started, discard response
+      if (activeAiRequestIdRef.current !== currentReqId || selectedPatientId !== currentPatientId) {
+        return;
+      }
+      setAiSummary(res.data);
+    } catch (err) {
+      if (activeAiRequestIdRef.current !== currentReqId || selectedPatientId !== currentPatientId) {
+        return;
+      }
+      const msg = err.response?.data?.message || "Unable to generate caregiver summary right now.";
+      setAiError(msg);
+    } finally {
+      if (activeAiRequestIdRef.current === currentReqId) {
+        setAiLoading(false);
+        aiLoadingRef.current = false;
+      }
+    }
+  };
 
   useEffect(() => {
     if (!localStorage.getItem("token")) {
@@ -304,6 +361,289 @@ function CaregiverDashboard() {
                         </div>
                       </div>
                     </div>
+
+                    {/* AI Caregiver Summary Section */}
+                    <section
+                      aria-labelledby="ai-caregiver-summary-heading"
+                      className="schedule-card"
+                      style={{ 
+                        border: "1px solid var(--border-light)", 
+                        padding: "22px 24px", 
+                        background: "white", 
+                        borderRadius: "var(--radius-md)",
+                        boxShadow: "var(--shadow-sm)"
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px", flexWrap: "wrap", gap: "10px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <span style={{ fontSize: "18px" }} aria-hidden="true">✨</span>
+                          <h3 id="ai-caregiver-summary-heading" style={{ color: "var(--text-main)", fontSize: "16px", fontWeight: "800", margin: 0 }}>
+                            AI Caregiver Summary
+                          </h3>
+                        </div>
+
+                        {/* Period Selector & Refresh */}
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                          <div style={{ display: "inline-flex", background: "#f1f5f9", padding: "3px", borderRadius: "10px", gap: "4px" }}>
+                            <button
+                              type="button"
+                              id="period-week-btn"
+                              onClick={() => handlePeriodChange("week")}
+                              style={{
+                                padding: "6px 14px",
+                                border: "none",
+                                borderRadius: "8px",
+                                cursor: "pointer",
+                                fontWeight: "700",
+                                fontSize: "12px",
+                                transition: "var(--transition-smooth)",
+                                background: aiPeriod === "week" ? "var(--primary)" : "transparent",
+                                color: aiPeriod === "week" ? "white" : "var(--text-muted)"
+                              }}
+                            >
+                              7 Days
+                            </button>
+                            <button
+                              type="button"
+                              id="period-month-btn"
+                              onClick={() => handlePeriodChange("month")}
+                              style={{
+                                padding: "6px 14px",
+                                border: "none",
+                                borderRadius: "8px",
+                                cursor: "pointer",
+                                fontWeight: "700",
+                                fontSize: "12px",
+                                transition: "var(--transition-smooth)",
+                                background: aiPeriod === "month" ? "var(--primary)" : "transparent",
+                                color: aiPeriod === "month" ? "white" : "var(--text-muted)"
+                              }}
+                            >
+                              30 Days
+                            </button>
+                          </div>
+                          {aiSummary && !aiLoading && (
+                            <button
+                              type="button"
+                              id="refresh-caregiver-summary-btn"
+                              onClick={handleGenerateSummary}
+                              disabled={aiLoading}
+                              aria-label="Refresh Caregiver Summary"
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "6px",
+                                background: "transparent",
+                                color: "var(--primary)",
+                                border: "1px solid var(--border-light)",
+                                borderRadius: "var(--radius-sm)",
+                                padding: "6px 12px",
+                                fontSize: "12px",
+                                fontWeight: "700",
+                                cursor: "pointer",
+                                transition: "var(--transition-smooth)"
+                              }}
+                            >
+                              🔄 Refresh
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* State: Loading */}
+                      {aiLoading && (
+                        <div style={{ textAlign: "center", padding: "32px 16px", color: "var(--text-muted)" }}>
+                          <svg
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="3"
+                            style={{ animation: "spin 1s linear infinite", marginBottom: "10px", display: "inline-block", color: "var(--primary)" }}
+                            aria-hidden="true"
+                          >
+                            <circle cx="12" cy="12" r="10" stroke="rgba(0,0,0,0.1)" strokeWidth="3" />
+                            <path d="M12 2a10 10 0 0 1 10 10" stroke="var(--primary)" strokeWidth="3" />
+                          </svg>
+                          <div style={{ fontSize: "14px", fontWeight: "600" }}>Analyzing patient tracking data...</div>
+                        </div>
+                      )}
+
+                      {/* State: Error */}
+                      {!aiLoading && aiError && (
+                        <div style={{ padding: "16px", background: "#fef2f2", borderRadius: "var(--radius-sm)", border: "1px solid #fecaca" }}>
+                          <p style={{ margin: "0 0 12px 0", fontSize: "13px", color: "var(--danger)", fontWeight: "600" }}>
+                            {aiError || "Unable to generate caregiver summary right now."}
+                          </p>
+                          <button
+                            type="button"
+                            id="retry-caregiver-summary-btn"
+                            onClick={handleGenerateSummary}
+                            disabled={aiLoading}
+                            style={{
+                              background: "white",
+                              color: "var(--danger)",
+                              border: "1px solid var(--danger)",
+                              borderRadius: "var(--radius-sm)",
+                              padding: "6px 14px",
+                              fontSize: "12px",
+                              fontWeight: "700",
+                              cursor: "pointer"
+                            }}
+                          >
+                            Try Again
+                          </button>
+                        </div>
+                      )}
+
+                      {/* State: Initial Prompt */}
+                      {!aiLoading && !aiError && !aiSummary && (
+                        <div>
+                          <p style={{ fontSize: "13px", color: "var(--text-muted)", margin: "0 0 16px 0", lineHeight: "1.5" }}>
+                            Generate an AI-powered summary of this patient's medication tracking patterns.
+                          </p>
+                          <button
+                            type="button"
+                            id="generate-caregiver-summary-btn"
+                            onClick={handleGenerateSummary}
+                            disabled={aiLoading}
+                            aria-label="Generate AI Summary"
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "8px",
+                              background: "var(--primary)",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "var(--radius-md)",
+                              padding: "10px 20px",
+                              fontSize: "13px",
+                              fontWeight: "700",
+                              cursor: "pointer",
+                              boxShadow: "var(--shadow-sm)",
+                              transition: "var(--transition-smooth)"
+                            }}
+                          >
+                            ✨ Generate AI Summary
+                          </button>
+                        </div>
+                      )}
+
+                      {/* State: Insufficient Data */}
+                      {!aiLoading && !aiError && aiSummary?.isInsufficientData && (
+                        <div style={{ padding: "16px", background: "#f8fafc", borderRadius: "var(--radius-sm)", border: "1px solid var(--border-light)" }}>
+                          <p style={{ margin: "0 0 6px 0", fontSize: "14px", fontWeight: "700", color: "var(--text-main)" }}>
+                            Not enough medication history yet for this patient.
+                          </p>
+                          <p style={{ margin: 0, fontSize: "13px", color: "var(--text-muted)", lineHeight: "1.5" }}>
+                            Once this patient begins logging doses, you can generate an AI summary of their adherence patterns.
+                          </p>
+                          {aiSummary.disclaimer && (
+                            <div style={{ fontSize: "11px", color: "var(--text-light)", marginTop: "12px", borderTop: "1px solid var(--border-light)", paddingTop: "8px", fontStyle: "italic" }}>
+                              {aiSummary.disclaimer}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* State: Successful Summary */}
+                      {!aiLoading && !aiError && aiSummary && !aiSummary.isInsufficientData && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                          {/* Summary */}
+                          {aiSummary.summary && (
+                            <div style={{
+                              background: "#f8fafc",
+                              padding: "14px 16px",
+                              borderRadius: "var(--radius-sm)",
+                              borderLeft: "4px solid var(--primary)",
+                              borderTop: "1px solid var(--border-light)",
+                              borderRight: "1px solid var(--border-light)",
+                              borderBottom: "1px solid var(--border-light)"
+                            }}>
+                              <div style={{ fontSize: "11px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "4px" }}>
+                                Summary
+                              </div>
+                              <p style={{ margin: 0, fontSize: "13px", color: "var(--text-main)", lineHeight: "1.5", fontWeight: "500", wordBreak: "break-word" }}>
+                                {aiSummary.summary}
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Positive Observation */}
+                          {aiSummary.positiveObservation && (
+                            <div style={{
+                              background: "rgba(16, 185, 129, 0.08)",
+                              padding: "12px 16px",
+                              borderRadius: "var(--radius-sm)",
+                              border: "1px solid rgba(16, 185, 129, 0.25)",
+                              display: "flex",
+                              alignItems: "flex-start",
+                              gap: "10px"
+                            }}>
+                              <span style={{ color: "var(--success)", fontWeight: "bold", fontSize: "14px", lineHeight: "1.4" }}>✓</span>
+                              <div>
+                                <div style={{ fontSize: "11px", fontWeight: "700", color: "var(--success)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "2px" }}>
+                                  Positive Observation
+                                </div>
+                                <p style={{ margin: 0, fontSize: "13px", color: "var(--text-main)", lineHeight: "1.5", wordBreak: "break-word" }}>
+                                  {aiSummary.positiveObservation}
+                                </p>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Observed Patterns */}
+                          {Array.isArray(aiSummary.patterns) && aiSummary.patterns.length > 0 && (
+                            <div style={{
+                              background: "white",
+                              padding: "14px 16px",
+                              borderRadius: "var(--radius-sm)",
+                              border: "1px solid var(--border-light)"
+                            }}>
+                              <div style={{ fontSize: "11px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "8px" }}>
+                                Observed Patterns
+                              </div>
+                              <ul style={{ margin: 0, paddingLeft: "18px", display: "flex", flexDirection: "column", gap: "6px" }}>
+                                {aiSummary.patterns.map((pattern, idx) => (
+                                  <li key={idx} style={{ fontSize: "13px", color: "var(--text-main)", lineHeight: "1.5", wordBreak: "break-word" }}>
+                                    {pattern}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          {/* Attention Areas */}
+                          {Array.isArray(aiSummary.attentionItems) && aiSummary.attentionItems.length > 0 && (
+                            <div style={{
+                              background: "rgba(245, 158, 11, 0.08)",
+                              padding: "14px 16px",
+                              borderRadius: "var(--radius-sm)",
+                              border: "1px solid rgba(245, 158, 11, 0.3)"
+                            }}>
+                              <div style={{ fontSize: "11px", fontWeight: "700", color: "var(--warning)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "8px" }}>
+                                Attention Areas
+                              </div>
+                              <ul style={{ margin: 0, paddingLeft: "18px", display: "flex", flexDirection: "column", gap: "6px" }}>
+                                {aiSummary.attentionItems.map((item, idx) => (
+                                  <li key={idx} style={{ fontSize: "13px", color: "var(--text-main)", lineHeight: "1.5", wordBreak: "break-word" }}>
+                                    {item}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          {/* Disclaimer */}
+                          {aiSummary.disclaimer && (
+                            <div style={{ fontSize: "11px", color: "var(--text-light)", fontStyle: "italic", borderTop: "1px solid var(--border-light)", paddingTop: "8px" }}>
+                              {aiSummary.disclaimer}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </section>
 
                     {/* Patient's Medicine List */}
                     <div className="schedule-section">

@@ -54,10 +54,18 @@ export async function syncMedicinesToOfflineStorage(medicines) {
     localStorage.setItem("medremind_cached_medicines", JSON.stringify(medicines));
   } catch {}
 
-  // 2. Persist to IndexedDB
+  // 2. Persist to IndexedDB — clear first for user isolation
   try {
     const db = await openDB();
     if (db) {
+      // Clear existing schedules so a new user doesn't inherit the previous
+      // user's medicine reminders after logout
+      try {
+        const clearTx = db.transaction("schedules", "readwrite");
+        clearTx.objectStore("schedules").clear();
+        await new Promise((res, rej) => { clearTx.oncomplete = res; clearTx.onerror = rej; });
+      } catch {}
+
       const tx = db.transaction(["schedules", "settings"], "readwrite");
       const schedStore = tx.objectStore("schedules");
       for (const med of medicines) {
@@ -74,7 +82,16 @@ export async function syncMedicinesToOfflineStorage(medicines) {
     console.warn("IndexedDB sync error:", err);
   }
 
-  // 3. Post to Service Worker
+  // 3. Resolve the backend API base URL so the SW uses the correct server
+  // for offline dose queue flushing (avoid hitting the frontend origin)
+  const getApiBase = () => {
+    if (process.env.REACT_APP_API_URL) return process.env.REACT_APP_API_URL.replace(/\/+$/, "");
+    const host = typeof window !== "undefined" ? window.location.hostname : "";
+    if (host === "localhost" || host === "127.0.0.1") return "http://localhost:5000";
+    return "https://medi-time-2peh.onrender.com";
+  };
+
+  // 4. Post to Service Worker (includes apiBaseUrl for correct offline sync)
   try {
     if ("serviceWorker" in navigator) {
       const registration = await navigator.serviceWorker.ready;
@@ -83,7 +100,8 @@ export async function syncMedicinesToOfflineStorage(medicines) {
         targetWorker.postMessage({
           type: "SYNC_SCHEDULES",
           medicines,
-          token: localStorage.getItem("token")
+          token: localStorage.getItem("token"),
+          apiBaseUrl: getApiBase()
         });
       }
     }
@@ -198,5 +216,40 @@ export async function setupAppNotifications() {
   } catch (err) {
     console.error("setupAppNotifications error:", err);
     return false;
+  }
+}
+
+/**
+ * Clear all offline schedules and notification history from IndexedDB.
+ * MUST be called on logout so the service worker stops firing the previous
+ * user's medication reminders for any subsequent session.
+ */
+export async function clearOfflineStorage() {
+  // Tell the service worker to stop checking (send empty schedule list)
+  try {
+    if ("serviceWorker" in navigator) {
+      const registration = await navigator.serviceWorker.ready;
+      const targetWorker = registration.active || navigator.serviceWorker.controller;
+      if (targetWorker) {
+        targetWorker.postMessage({ type: "SYNC_SCHEDULES", medicines: [], token: null, apiBaseUrl: null });
+      }
+    }
+  } catch {}
+
+  // Clear IndexedDB stores
+  try {
+    const db = await openDB();
+    if (!db) return;
+    const stores = ["schedules", "notified_events"];
+    for (const storeName of stores) {
+      try {
+        const tx = db.transaction(storeName, "readwrite");
+        tx.objectStore(storeName).clear();
+      } catch {}
+    }
+    // Clear cached medicines from localStorage too
+    localStorage.removeItem("medremind_cached_medicines");
+  } catch (err) {
+    console.warn("clearOfflineStorage error:", err);
   }
 }
