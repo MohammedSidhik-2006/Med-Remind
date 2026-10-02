@@ -3,11 +3,15 @@ const { calculateReportMetrics } = require("./reportMetricsService");
 
 const MODEL_CANDIDATES = [
   process.env.GEMINI_MODEL,
-  "gemini-flash-lite-latest",
-  "gemini-3.1-flash-lite",
   "gemini-3.5-flash-lite",
-  "gemini-flash-latest"
+  "gemini-flash-lite-latest",
+  "gemini-flash-latest",
+  "gemini-3.8-flash"
 ].filter(Boolean);
+
+// In-memory cache to prevent quota exhaustion when user repeatedly views or clicks Generate Insights
+const insightCache = new Map();
+const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes TTL
 
 /**
  * Resilient multi-model executor: tries high-quota candidates sequentially.
@@ -186,6 +190,12 @@ async function generateReportInsights(userId, period = "week") {
     };
   }
 
+  const cacheKey = `report:${userId}:${period}:${payload.totalDoses}:${payload.overallAdherence}:${payload.currentStreak}`;
+  const cached = insightCache.get(cacheKey);
+  if (cached && Date.now() < cached.expiresAt) {
+    return cached.data;
+  }
+
   // Remove internal calculation counter before sending to model
   const modelPayload = {
     period: payload.period,
@@ -234,7 +244,9 @@ REQUIRED JSON SCHEMA:
 
   try {
     const parsed = JSON.parse(responseText);
-    return validateAndCleanResponse(parsed);
+    const cleanResult = validateAndCleanResponse(parsed);
+    insightCache.set(cacheKey, { data: cleanResult, expiresAt: Date.now() + CACHE_TTL_MS });
+    return cleanResult;
   } catch (parseErr) {
     console.error("[AI Service] JSON parsing failed from Gemini response:", parseErr.message, "Response was:", responseText);
     const err = new Error("Malformed response received from AI model");
@@ -308,6 +320,12 @@ async function generateCaregiverSummary(patientId, period = "week") {
     };
   }
 
+  const cacheKey = `caregiver:${patientId}:${period}:${payload.totalDoses}:${payload.overallAdherence}:${payload.currentStreak}`;
+  const cached = insightCache.get(cacheKey);
+  if (cached && Date.now() < cached.expiresAt) {
+    return cached.data;
+  }
+
   // Remove internal calculation counter before sending to model
   // Strictly excludes patient/caregiver MongoDB IDs, names, emails, and relationship labels
   const modelPayload = {
@@ -359,7 +377,9 @@ REQUIRED JSON SCHEMA:
 
   try {
     const parsed = JSON.parse(responseText);
-    return validateAndCleanCaregiverResponse(parsed);
+    const cleanResult = validateAndCleanCaregiverResponse(parsed);
+    insightCache.set(cacheKey, { data: cleanResult, expiresAt: Date.now() + CACHE_TTL_MS });
+    return cleanResult;
   } catch (parseErr) {
     console.error("[AI Caregiver Service] JSON parsing failed from Gemini response:", parseErr.message, "Response was:", responseText);
     const err = new Error("Malformed response received from AI model");

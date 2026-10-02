@@ -90,8 +90,11 @@ async function calculateReportMetrics(userId, period = "week") {
   const todayStr = getLocalDate(checkDate);
   const todayData = byDate[todayStr];
 
-  // If today has no taken doses yet, don't penalize active streak — start from yesterday
-  if (!todayData || todayData.taken === 0) {
+  // If today already has missed doses, the streak is broken today.
+  // If today has no activity yet (or only pending doses), don't penalize active streak — start from yesterday.
+  if (todayData && todayData.missed > 0) {
+    // Keep checkDate as today so the loop checks todayData and breaks
+  } else if (!todayData || todayData.taken === 0) {
     checkDate.setDate(checkDate.getDate() - 1);
   }
 
