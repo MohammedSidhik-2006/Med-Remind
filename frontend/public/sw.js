@@ -1,7 +1,8 @@
-// MedRemind Service Worker — Offline Support + Local Alarms + Background Push
-const CACHE_NAME = "medremind-v6";
+// MedRemind Service Worker — Production-Grade Notification Engine v7
+// Fixes: timezone, double-fire, missing action data, duplicate intervals, cache bloat
+const CACHE_NAME = "medremind-v7";
 const DB_NAME = "MedRemindOfflineDB";
-const DB_VERSION = 1;
+const DB_VERSION = 2; // Bumped to trigger onupgradeneeded for new store
 
 // App shell files to pre-cache on install
 const APP_SHELL = [
@@ -13,7 +14,30 @@ const APP_SHELL = [
   "/medremind-icon-192.svg"
 ];
 
-// ── IndexedDB Engine for Service Worker ───────────────────────────────────────
+// ── Timezone-aware local time (IST = UTC+5:30) ────────────────────────────────
+// CRITICAL: Always compute time in IST regardless of device locale/timezone.
+// Mobile users globally must get alerts at the correct IST-scheduled time.
+function getISTDateTime() {
+  const now = new Date();
+  // UTC offset for IST is +5:30 = 330 minutes
+  const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+  const istMs = now.getTime() + IST_OFFSET_MS;
+  const ist = new Date(istMs);
+
+  const year   = ist.getUTCFullYear();
+  const month  = String(ist.getUTCMonth() + 1).padStart(2, "0");
+  const day    = String(ist.getUTCDate()).padStart(2, "0");
+  const hours  = String(ist.getUTCHours()).padStart(2, "0");
+  const mins   = String(ist.getUTCMinutes()).padStart(2, "0");
+
+  return {
+    today:       `${year}-${month}-${day}`,
+    currentTime: `${hours}:${mins}`,
+    nowMs:       now.getTime()
+  };
+}
+
+// ── IndexedDB Engine ──────────────────────────────────────────────────────────
 function openDatabase() {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
@@ -23,7 +47,9 @@ function openDatabase() {
         db.createObjectStore("schedules", { keyPath: "_id" });
       }
       if (!db.objectStoreNames.contains("notified_events")) {
-        db.createObjectStore("notified_events", { keyPath: "key" });
+        const store = db.createObjectStore("notified_events", { keyPath: "key" });
+        // Index by timestamp so we can prune old entries efficiently
+        store.createIndex("byTimestamp", "timestamp");
       }
       if (!db.objectStoreNames.contains("offline_queue")) {
         db.createObjectStore("offline_queue", { keyPath: "id", autoIncrement: true });
@@ -32,152 +58,176 @@ function openDatabase() {
         db.createObjectStore("settings", { keyPath: "key" });
       }
     };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    req.onsuccess  = () => resolve(req.result);
+    req.onerror    = () => reject(req.error);
   });
 }
 
 function getAllFromStore(db, storeName) {
   return new Promise((resolve) => {
     try {
-      const tx = db.transaction(storeName, "readonly");
+      const tx    = db.transaction(storeName, "readonly");
       const store = tx.objectStore(storeName);
-      const req = store.getAll();
+      const req   = store.getAll();
       req.onsuccess = () => resolve(req.result || []);
-      req.onerror = () => resolve([]);
-    } catch {
-      resolve([]);
-    }
+      req.onerror   = () => resolve([]);
+    } catch { resolve([]); }
   });
 }
 
 function getFromStore(db, storeName, key) {
   return new Promise((resolve) => {
     try {
-      const tx = db.transaction(storeName, "readonly");
+      const tx    = db.transaction(storeName, "readonly");
       const store = tx.objectStore(storeName);
-      const req = store.get(key);
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => resolve(null);
-    } catch {
-      resolve(null);
-    }
+      const req   = store.get(key);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror   = () => resolve(null);
+    } catch { resolve(null); }
   });
 }
 
 function putInStore(db, storeName, value) {
   return new Promise((resolve) => {
     try {
-      const tx = db.transaction(storeName, "readwrite");
+      const tx    = db.transaction(storeName, "readwrite");
       const store = tx.objectStore(storeName);
-      const req = store.put(value);
+      const req   = store.put(value);
       req.onsuccess = () => resolve(true);
-      req.onerror = () => resolve(false);
-    } catch {
-      resolve(false);
-    }
+      req.onerror   = () => resolve(false);
+    } catch { resolve(false); }
   });
 }
 
 function deleteFromStore(db, storeName, key) {
   return new Promise((resolve) => {
     try {
-      const tx = db.transaction(storeName, "readwrite");
+      const tx    = db.transaction(storeName, "readwrite");
       const store = tx.objectStore(storeName);
-      const req = store.delete(key);
+      const req   = store.delete(key);
       req.onsuccess = () => resolve(true);
-      req.onerror = () => resolve(false);
-    } catch {
-      resolve(false);
-    }
+      req.onerror   = () => resolve(false);
+    } catch { resolve(false); }
   });
 }
 
-// ── Check & Trigger Due Medications (Offline & Background) ───────────────────
+// ── Prune notified_events older than 48 hours (prevents IndexedDB bloat) ─────
+async function pruneNotifiedEvents(db) {
+  try {
+    const cutoff = Date.now() - 48 * 60 * 60 * 1000;
+    const tx     = db.transaction("notified_events", "readwrite");
+    const store  = tx.objectStore("notified_events");
+    const idx    = store.index("byTimestamp");
+    const range  = IDBKeyRange.upperBound(cutoff);
+    const req    = idx.openCursor(range);
+    req.onsuccess = (e) => {
+      const cursor = e.target.result;
+      if (cursor) { cursor.delete(); cursor.continue(); }
+    };
+  } catch (e) {
+    // byTimestamp index may not exist in old DB version — safe to skip
+  }
+}
+
+// ── Core: Check and fire due medication notifications ─────────────────────────
+// Uses IST time so notifications fire correctly regardless of device locale.
+// Deduplicates per slot per day so only one notification fires per medicine per time.
+// Does NOT fire if the server already sent a push (prevents doubling).
 async function checkDueMedications() {
   try {
     const db = await openDatabase();
     const schedules = await getAllFromStore(db, "schedules");
     if (!schedules || schedules.length === 0) return;
 
-    const now = new Date();
-    const hours = String(now.getHours()).padStart(2, "0");
-    const minutes = String(now.getMinutes()).padStart(2, "0");
-    const currentTime = `${hours}:${minutes}`;
-    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    const { today, currentTime, nowMs } = getISTDateTime();
+
+    // Prune old entries periodically (run ~every 30 minutes)
+    if (Math.floor(nowMs / 1000) % 1800 < 30) {
+      await pruneNotifiedEvents(db);
+    }
 
     for (const med of schedules) {
       if (!med || !med.name) continue;
 
-      // Check date validity range if set
+      // Respect medicine start/end date window
       if (med.startDate && today < med.startDate) continue;
-      if (med.endDate && today > med.endDate) continue;
+      if (med.endDate   && today > med.endDate)   continue;
 
-      const allTimes = Array.isArray(med.times) && med.times.length > 0 ? med.times : (med.time ? [med.time] : []);
-      const isSnoozeMatured = med.snoozedUntil && new Date(med.snoozedUntil).getTime() <= now.getTime();
+      const allTimes = Array.isArray(med.times) && med.times.length > 0
+        ? med.times
+        : (med.time ? [med.time] : []);
 
-      // Check scheduled dose times
+      const isSnoozeMatured = med.snoozedUntil &&
+        new Date(med.snoozedUntil).getTime() <= nowMs;
+
       for (const slotTime of allTimes) {
         if (!slotTime) continue;
 
         const isCurrentSlot = (slotTime === currentTime);
+        if (!isCurrentSlot && !isSnoozeMatured) continue;
+
+        // If the dose was already taken (marked in local cache), skip
+        if (med.taken && !isSnoozeMatured) continue;
+
+        // Per-slot deduplication key — unique per day + medicine + scheduled time
         const slotKey = `${today}_${med._id}_${slotTime}`;
+        const alreadyFired = await getFromStore(db, "notified_events", slotKey);
+        if (alreadyFired) continue;
 
-        if (isCurrentSlot || isSnoozeMatured) {
-          const alreadyNotified = await getFromStore(db, "notified_events", slotKey);
-          if (!alreadyNotified && !med.taken) {
-            // Deduplicate immediately in database
-            await putInStore(db, "notified_events", { key: slotKey, timestamp: now.getTime() });
+        // Mark as fired BEFORE showing notification to prevent race in fast intervals
+        await putInStore(db, "notified_events", { key: slotKey, timestamp: nowMs });
 
-            if (isSnoozeMatured) {
-              med.snoozedUntil = null;
-              await putInStore(db, "schedules", med);
-            }
-
-            // Display OS notification even if app is closed or offline
-            await self.registration.showNotification(`💊 Time to take ${med.name}`, {
-              body: `${med.dosage} scheduled for ${slotTime}. Tap to record your dose.`,
-              icon: "/medremind-icon-192.svg",
-              badge: "/medremind-icon-192.svg",
-              tag: `local-med-${med._id}-${slotTime}`,
-              renotify: true,
-              requireInteraction: true,
-              vibrate: [300, 150, 300, 150, 300],
-              actions: [
-                { action: "take", title: "✅ Take Now" },
-                { action: "snooze", title: "⏰ Snooze 10m" }
-              ],
-              data: {
-                url: "/dashboard",
-                medicineId: med._id,
-                medicineName: med.name,
-                dosage: med.dosage,
-                scheduledTime: slotTime
-              }
-            });
-          }
+        if (isSnoozeMatured) {
+          // Clear snooze from local cache
+          med.snoozedUntil = null;
+          await putInStore(db, "schedules", med);
         }
+
+        // Show the OS notification with full action data
+        await self.registration.showNotification(`💊 Time to take ${med.name}`, {
+          body:               `${med.dosage} scheduled for ${slotTime}. Tap to confirm your dose.`,
+          icon:               "/medremind-icon-192.svg",
+          badge:              "/medremind-icon-192.svg",
+          tag:                `local-med-${med._id}-${slotTime}`,
+          renotify:           true,   // Force Android to re-display even if same tag
+          requireInteraction: true,   // Keep on screen until user acts
+          silent:             false,
+          vibrate:            [300, 150, 300, 150, 300],
+          actions: [
+            { action: "take",   title: "✅ Take Now" },
+            { action: "snooze", title: "⏰ Snooze 10m" }
+          ],
+          data: {
+            url:           "/dashboard",
+            medicineId:    med._id,
+            medicineName:  med.name,
+            dosage:        med.dosage,
+            scheduledTime: slotTime,
+            source:        "local"
+          }
+        });
       }
 
-      // Check Low Stock / Refill Alert
-      if (med.stock !== undefined && med.refillAt !== undefined && med.stock <= med.refillAt) {
+      // ── Low-stock local alert ─────────────────────────────────────────────
+      if (
+        typeof med.stock    === "number" &&
+        typeof med.refillAt === "number" &&
+        med.stock <= med.refillAt &&
+        med.stock >= 0
+      ) {
         const refillKey = `${today}_refill_${med._id}`;
-        const alreadyNotifiedRefill = await getFromStore(db, "notified_events", refillKey);
-        if (!alreadyNotifiedRefill) {
-          await putInStore(db, "notified_events", { key: refillKey, timestamp: now.getTime() });
+        const alreadyRefillFired = await getFromStore(db, "notified_events", refillKey);
+        if (!alreadyRefillFired) {
+          await putInStore(db, "notified_events", { key: refillKey, timestamp: nowMs });
           await self.registration.showNotification(`📦 Low Stock Alert: ${med.name}`, {
-            body: `Only ${med.stock} doses remaining (refill threshold: ${med.refillAt}). Tap to view refill tracker.`,
-            icon: "/medremind-icon-192.svg",
-            badge: "/medremind-icon-192.svg",
-            tag: `local-refill-${med._id}`,
+            body:    `Only ${med.stock} dose${med.stock !== 1 ? "s" : ""} remaining (refill at: ${med.refillAt}). Tap to view refill tracker.`,
+            icon:    "/medremind-icon-192.svg",
+            badge:   "/medremind-icon-192.svg",
+            tag:     `local-refill-${med._id}`,
+            renotify: true,
             vibrate: [250, 100, 250],
-            actions: [
-              { action: "refill", title: "📦 Refill Tracker" }
-            ],
-            data: {
-              url: "/refill",
-              medicineId: med._id
-            }
+            actions: [{ action: "refill", title: "📦 Refill Now" }],
+            data:    { url: "/refill", medicineId: med._id }
           });
         }
       }
@@ -187,98 +237,36 @@ async function checkDueMedications() {
   }
 }
 
-// ── Notification Triggers API (OS-native offline alarm scheduling) ─────────────
-async function scheduleTriggerAlarms(medicines) {
-  if (!('showTrigger' in Notification.prototype) && typeof TimestampTrigger === 'undefined') {
-    return; // Fallback handled by background alarm heartbeat
-  }
-
-  const now = new Date();
-
-  for (const med of medicines) {
-    if (!med || !med.name || med.taken) continue;
-    const allTimes = Array.isArray(med.times) && med.times.length > 0 ? med.times : (med.time ? [med.time] : []);
-
-    for (const timeStr of allTimes) {
-      if (!timeStr || !timeStr.includes(":")) continue;
-      const [h, m] = timeStr.split(":").map(Number);
-      
-      const targetToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0, 0);
-      
-      // Schedule only upcoming slots
-      if (targetToday.getTime() > now.getTime()) {
-        try {
-          const trigger = new TimestampTrigger(targetToday.getTime());
-          await self.registration.showNotification(`💊 Time to take ${med.name}`, {
-            body: `${med.dosage} scheduled for ${timeStr}. Tap to confirm your dose.`,
-            icon: "/medremind-icon-192.svg",
-            badge: "/medremind-icon-192.svg",
-            tag: `trigger-med-${med._id}-${timeStr}`,
-            showTrigger: trigger,
-            requireInteraction: true,
-            vibrate: [300, 150, 300, 150, 300],
-            actions: [
-              { action: "take", title: "✅ Take Now" },
-              { action: "snooze", title: "⏰ Snooze 10m" }
-            ],
-            data: {
-              url: "/dashboard",
-              medicineId: med._id,
-              medicineName: med.name,
-              scheduledTime: timeStr
-            }
-          });
-        } catch (e) {
-          console.warn("[SW] TimestampTrigger error:", e);
-        }
-      }
-    }
-  }
-}
-
-// ── Background Alarm Heartbeat Loop ───────────────────────────────────────────
-let alarmTimer = null;
-function startAlarmHeartbeat() {
-  if (alarmTimer) clearInterval(alarmTimer);
-  checkDueMedications();
-  // Check every 30 seconds so scheduled minutes are never missed
-  alarmTimer = setInterval(() => {
-    checkDueMedications();
-  }, 30000);
-}
-
-// ── Flush Offline Taken Queue to Backend ──────────────────────────────────────
+// ── Flush Offline Dose Queue to Backend ───────────────────────────────────────
 async function flushOfflineQueue() {
   try {
-    const db = await openDatabase();
+    const db    = await openDatabase();
     const queue = await getAllFromStore(db, "offline_queue");
     if (!queue || queue.length === 0) return;
 
-    const tokenSetting = await getFromStore(db, "settings", "authToken");
-    const token = tokenSetting?.value;
+    const tokenSetting  = await getFromStore(db, "settings", "authToken");
+    const token         = tokenSetting?.value;
     if (!token) return;
 
-    // Use stored backend API base URL so requests go to the correct server
-    // (not the frontend origin which has no API routes)
     const apiSetting = await getFromStore(db, "settings", "apiBaseUrl");
-    const apiBase = (apiSetting?.value || "https://medi-time-2peh.onrender.com").replace(/\/+$/, "");
+    const apiBase    = (apiSetting?.value || "https://medi-time-2peh.onrender.com").replace(/\/+$/, "");
 
     for (const item of queue) {
       try {
         const res = await fetch(`${apiBase}/api/medicine/taken/${item.medicineId}`, {
-          method: "PATCH",
+          method:  "PATCH",
           headers: {
-            "Content-Type": "application/json",
+            "Content-Type":  "application/json",
             "Authorization": `Bearer ${token}`
           },
           body: JSON.stringify({ scheduledTime: item.scheduledTime })
         });
         if (res.ok) {
           await deleteFromStore(db, "offline_queue", item.id);
+          console.log(`[SW] Offline dose synced: ${item.medicineId}`);
         }
       } catch {
-        // Still offline; will retry on next sync event
-        break;
+        break; // Still offline — retry on next sync event
       }
     }
   } catch (err) {
@@ -286,13 +274,31 @@ async function flushOfflineQueue() {
   }
 }
 
-// ── Install: pre-cache app shell with resilient error handling ────────────────
+// ── Background Alarm Heartbeat (single interval, started once in activate) ────
+// Checks every 30 seconds to catch the exact scheduled minute.
+// Single instance guard prevents overlapping setIntervals.
+let _heartbeatInterval = null;
+
+function startAlarmHeartbeat() {
+  if (_heartbeatInterval) {
+    clearInterval(_heartbeatInterval);
+    _heartbeatInterval = null;
+  }
+  // Run immediately
+  checkDueMedications();
+  // Then every 30 seconds
+  _heartbeatInterval = setInterval(checkDueMedications, 30000);
+}
+
+// ── Install: pre-cache app shell ──────────────────────────────────────────────
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(async (cache) => {
       await Promise.allSettled(
         APP_SHELL.map((url) =>
-          cache.add(url).catch((err) => console.warn(`[SW] Pre-cache skipped for ${url}:`, err.message))
+          cache.add(url).catch((err) =>
+            console.warn(`[SW] Pre-cache skipped for ${url}:`, err.message)
+          )
         )
       );
       return self.skipWaiting();
@@ -300,7 +306,7 @@ self.addEventListener("install", (event) => {
   );
 });
 
-// ── Activate: clean up old caches & start background alarm ────────────────────
+// ── Activate: clean up old caches and start heartbeat (ONCE) ─────────────────
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys()
@@ -309,75 +315,63 @@ self.addEventListener("activate", (event) => {
       )
       .then(() => self.clients.claim())
       .then(() => {
+        // Start heartbeat HERE only — not also at the bottom of the file
         startAlarmHeartbeat();
       })
   );
 });
 
-// ── Fetch: offline-capable network strategy ───────────────────────────────────
+// ── Fetch: offline-capable network-first for navigation, cache-first for assets
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   if (request.method !== "GET") return;
 
   const url = new URL(request.url);
 
-  // CRITICAL: NEVER intercept cross-origin requests
+  // Never intercept cross-origin (API calls, CDN, fonts)
   if (url.origin !== self.location.origin) return;
 
-  // CRITICAL: NEVER intercept API dynamic requests
+  // Never intercept API routes — they must always hit the live backend
   if (
-    url.pathname.startsWith("/api") ||
-    url.pathname.startsWith("/auth") ||
-    url.pathname.startsWith("/medicine") ||
-    url.pathname.startsWith("/caregiver") ||
-    url.pathname.startsWith("/admin") ||
-    url.pathname.startsWith("/vapid-public-key") ||
-    url.pathname.startsWith("/save-subscription") ||
+    url.pathname.startsWith("/api")             ||
+    url.pathname.startsWith("/auth")            ||
+    url.pathname.startsWith("/medicine")        ||
+    url.pathname.startsWith("/caregiver")       ||
+    url.pathname.startsWith("/admin")           ||
+    url.pathname.startsWith("/vapid-public-key")||
+    url.pathname.startsWith("/save-subscription")||
     url.pathname.startsWith("/send-notification")
-  ) {
-    return;
-  }
+  ) return;
 
-  // Navigation requests (page loads): try network first, fall back to cached
-  // /index.html so the React SPA can handle the route client-side.
-  // IMPORTANT: always return a valid Response — never let the promise resolve
-  // to undefined, which causes 'Failed to convert value to Response' crashes.
+  // Navigation (page loads): network-first, fallback to cached index.html
   if (request.mode === "navigate") {
     event.respondWith(
-      fetch(request)
-        .catch(() =>
-          caches.match("/index.html").then(
-            (cached) =>
-              cached ||
-              new Response(
-                '<!DOCTYPE html><html><head><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=/"></head><body></body></html>',
-                { status: 200, headers: { "Content-Type": "text/html; charset=utf-8" } }
-              )
+      fetch(request).catch(() =>
+        caches.match("/index.html").then(
+          (cached) => cached || new Response(
+            '<!DOCTYPE html><html><head><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=/"></head><body></body></html>',
+            { status: 200, headers: { "Content-Type": "text/html; charset=utf-8" } }
           )
         )
+      )
     );
     return;
   }
 
-  // Static assets: cache-first, then network, always resolve with a Response
+  // Static assets: cache-first, then network
   event.respondWith(
     caches.match(request).then((cached) => {
       if (cached) return cached;
-
       return fetch(request)
         .then((response) => {
-          if (
-            response &&
-            response.status === 200 &&
-            (response.type === "basic" || response.type === "cors")
-          ) {
+          if (response && response.status === 200 &&
+              (response.type === "basic" || response.type === "cors")) {
             const cloned = response.clone();
             caches.open(CACHE_NAME).then((cache) => cache.put(request, cloned));
           }
           return response;
         })
         .catch(() =>
-          // Return a valid empty response so event.respondWith never gets undefined
           caches.match(request).then(
             (fallback) => fallback || new Response("", { status: 408, statusText: "Offline" })
           )
@@ -386,48 +380,69 @@ self.addEventListener("fetch", (event) => {
   );
 });
 
-// ── Push: remote WebPush notifications from server ────────────────────────────
+// ── Push: server-sent WebPush notifications ───────────────────────────────────
+// Server sends the full payload including medicineId and scheduledTime.
+// Tag matches the local SW tag so the push REPLACES the local alarm notification,
+// preventing the "double notification" problem.
 self.addEventListener("push", (event) => {
   if (!event.data) return;
 
   let data = {};
-  try {
-    data = event.data.json();
-  } catch {
-    data = { title: "MedRemind", body: event.data.text() };
-  }
+  try   { data = event.data.json(); }
+  catch { data = { title: "MedRemind", body: event.data.text() }; }
 
   const title   = data.title || "MedRemind Alert";
   const options = {
-    body:               data.body  || "",
-    icon:               data.icon  || "/medremind-icon-192.svg",
+    body:               data.body    || "",
+    icon:               data.icon    || "/medremind-icon-192.svg",
     badge:              "/medremind-icon-192.svg",
-    tag:                data.tag   || `push-${Date.now()}`,
+    // CRITICAL: use the same tag format as checkDueMedications so push REPLACES local alarm
+    tag:                data.tag     || `push-${Date.now()}`,
+    renotify:           true,         // Always re-vibrate/re-show even if tag exists
     requireInteraction: true,
-    vibrate:            [300, 150, 300, 150, 300], // Wake mobile device from sleep
+    silent:             false,
+    vibrate:            [300, 150, 300, 150, 300],
     actions: [
-      { action: "take", title: "✅ Take Now" },
+      { action: "take",   title: "✅ Take Now"  },
       { action: "snooze", title: "⏰ Snooze 10m" }
     ],
-    data: { 
-      url: data.url || `${self.location.origin}/dashboard`,
-      medicineId: data.medicineId,
-      medicineName: data.medicineName,
-      scheduledTime: data.scheduledTime
+    data: {
+      url:           data.url          || "/dashboard",
+      medicineId:    data.medicineId   || null,
+      medicineName:  data.medicineName || null,
+      dosage:        data.dosage       || null,
+      scheduledTime: data.scheduledTime || null,
+      source:        "push"
     }
   };
 
-  event.waitUntil(self.registration.showNotification(title, options));
+  // Mark this push slot as already notified so the local SW heartbeat
+  // won't fire a duplicate notification for the same medicine at the same minute
+  event.waitUntil(
+    (async () => {
+      if (data.medicineId && data.scheduledTime) {
+        try {
+          const db       = await openDatabase();
+          const { today } = getISTDateTime();
+          const slotKey  = `${today}_${data.medicineId}_${data.scheduledTime}`;
+          await putInStore(db, "notified_events", { key: slotKey, timestamp: Date.now() });
+        } catch (e) {
+          console.warn("[SW] Push dedup write error:", e);
+        }
+      }
+      await self.registration.showNotification(title, options);
+    })()
+  );
 });
 
-// ── Periodic Background Sync (runs in background on Android/Chrome) ───────────
+// ── Periodic Background Sync (Chrome Android) ─────────────────────────────────
 self.addEventListener("periodicsync", (event) => {
   if (event.tag === "medremind-reminders" || event.tag === "med-check") {
     event.waitUntil(checkDueMedications());
   }
 });
 
-// ── Background Sync (when connectivity is restored) ───────────────────────────
+// ── Background Sync (reconnect after offline) ─────────────────────────────────
 self.addEventListener("sync", (event) => {
   if (event.tag === "sync-taken-doses") {
     event.waitUntil(flushOfflineQueue());
@@ -436,7 +451,7 @@ self.addEventListener("sync", (event) => {
   }
 });
 
-// ── Message: Receive updated schedules from client app ────────────────────────
+// ── Message Handler: Receive schedules and commands from the React app ─────────
 self.addEventListener("message", (event) => {
   if (!event.data) return;
 
@@ -445,10 +460,9 @@ self.addEventListener("message", (event) => {
     event.waitUntil((async () => {
       try {
         const db = await openDatabase();
+
         if (Array.isArray(medicines)) {
-          // CLEAR old schedules first to ensure user isolation:
-          // If a different user logged in, their predecessor's medicines
-          // must NOT trigger notifications for the new user.
+          // Clear old schedules first (user isolation — prevent cross-user alarm leakage)
           try {
             const tx = db.transaction("schedules", "readwrite");
             tx.objectStore("schedules").clear();
@@ -456,19 +470,23 @@ self.addEventListener("message", (event) => {
           } catch (clearErr) {
             console.warn("[SW] Could not clear old schedules:", clearErr);
           }
+
           for (const med of medicines) {
             if (med && med._id) {
               await putInStore(db, "schedules", med);
             }
           }
-          await scheduleTriggerAlarms(medicines);
         }
+
         if (token) {
           await putInStore(db, "settings", { key: "authToken", value: token });
         }
+
         if (apiBaseUrl) {
           await putInStore(db, "settings", { key: "apiBaseUrl", value: apiBaseUrl });
         }
+
+        // Restart heartbeat to pick up new schedules immediately
         startAlarmHeartbeat();
       } catch (err) {
         console.warn("[SW] Error syncing schedules:", err);
@@ -479,34 +497,60 @@ self.addEventListener("message", (event) => {
   if (event.data.type === "CHECK_NOW") {
     event.waitUntil(checkDueMedications());
   }
+
+  // Called on logout — stop heartbeat and clear all user data
+  if (event.data.type === "CLEAR_USER_DATA") {
+    event.waitUntil((async () => {
+      try {
+        if (_heartbeatInterval) {
+          clearInterval(_heartbeatInterval);
+          _heartbeatInterval = null;
+        }
+        const db = await openDatabase();
+        const stores = ["schedules", "notified_events", "offline_queue"];
+        for (const storeName of stores) {
+          try {
+            const tx = db.transaction(storeName, "readwrite");
+            tx.objectStore(storeName).clear();
+          } catch (e) {}
+        }
+        // Close all open notifications belonging to this user
+        const notifications = await self.registration.getNotifications();
+        notifications.forEach((n) => n.close());
+      } catch (e) {
+        console.warn("[SW] CLEAR_USER_DATA error:", e);
+      }
+    })());
+  }
 });
 
-// ── Notification Click & Action Handlers ──────────────────────────────────────
+// ── Notification Click & Action Handler ───────────────────────────────────────
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
 
-  const data = event.notification.data || {};
+  const data   = event.notification.data || {};
   const action = event.action;
 
-  // 1. User clicked "Take Now" directly from notification
+  // ── "Take Now" action ─────────────────────────────────────────────────────
   if (action === "take" && data.medicineId) {
     event.waitUntil((async () => {
-      // Broadcast to open tabs IMMEDIATELY for responsive, instantaneous UI update
+      // 1. Broadcast IMMEDIATELY to any open app tabs for instant UI update
       try {
         const clientList = await clients.matchAll({ type: "window", includeUncontrolled: true });
         for (const client of clientList) {
-          client.postMessage({ 
-            type: "MEDICINE_TAKEN_OFFLINE", 
-            medicineId: data.medicineId,
+          client.postMessage({
+            type:          "MEDICINE_TAKEN_OFFLINE",
+            medicineId:    data.medicineId,
             scheduledTime: data.scheduledTime
           });
         }
       } catch (bcErr) {
-        console.warn("[SW] Immediate broadcast error:", bcErr);
+        console.warn("[SW] Broadcast error:", bcErr);
       }
 
+      // 2. Optimistically update local cache
       try {
-        const db = await openDatabase();
+        const db  = await openDatabase();
         const med = await getFromStore(db, "schedules", data.medicineId);
         if (med) {
           med.stock = Math.max(0, (med.stock || 0) - 1);
@@ -514,60 +558,72 @@ self.addEventListener("notificationclick", (event) => {
           await putInStore(db, "schedules", med);
         }
 
-        // Queue dose for backend synchronization
+        // 3. Queue for backend sync
         await putInStore(db, "offline_queue", {
-          medicineId: data.medicineId,
+          medicineId:    data.medicineId,
           scheduledTime: data.scheduledTime,
-          timestamp: Date.now()
+          timestamp:     Date.now()
         });
 
-        // Flush immediately if online
+        // 4. Flush immediately if online
         await flushOfflineQueue();
       } catch (err) {
-        console.warn("[SW] Error handling take action:", err);
+        console.warn("[SW] Take action error:", err);
       }
 
-      // Show immediate feedback confirmation
+      // 5. Confirmation notification
       await self.registration.showNotification(`✅ Dose Recorded: ${data.medicineName || "Medication"}`, {
-        body: `Great job! Your dose was confirmed and recorded.`,
-        icon: "/medremind-icon-192.svg",
-        badge: "/medremind-icon-192.svg",
-        tag: `feedback-${data.medicineId}`,
+        body:    `Great job! ${data.dosage ? data.dosage + " — " : ""}Your dose has been confirmed.`,
+        icon:    "/medremind-icon-192.svg",
+        badge:   "/medremind-icon-192.svg",
+        tag:     `confirm-${data.medicineId}-${data.scheduledTime || Date.now()}`,
         vibrate: [100, 50, 100],
-        data: { url: "/dashboard" }
+        data:    { url: "/dashboard" }
       });
     })());
     return;
   }
 
-  // 2. User clicked "Snooze 10m" directly from notification
+  // ── "Snooze 10m" action ───────────────────────────────────────────────────
   if (action === "snooze" && data.medicineId) {
     event.waitUntil((async () => {
+      const snoozeUntilMs  = Date.now() + 10 * 60 * 1000;
+      const snoozeUntilISO = new Date(snoozeUntilMs).toISOString();
+
       try {
-        const db = await openDatabase();
+        const db  = await openDatabase();
         const med = await getFromStore(db, "schedules", data.medicineId);
         if (med) {
-          med.snoozedUntil = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+          med.snoozedUntil = snoozeUntilISO;
           await putInStore(db, "schedules", med);
         }
-      } catch (err) {}
+
+        // Remove the deduplication key so the snoozed alarm can fire again
+        if (data.scheduledTime) {
+          const { today } = getISTDateTime();
+          const slotKey   = `${today}_${data.medicineId}_${data.scheduledTime}`;
+          await deleteFromStore(db, "notified_events", slotKey);
+        }
+      } catch (e) {
+        console.warn("[SW] Snooze cache update error:", e);
+      }
 
       await self.registration.showNotification(`⏰ Snoozed for 10 Minutes`, {
-        body: `We will remind you about ${data.medicineName || "your medication"} in 10 minutes.`,
-        icon: "/medremind-icon-192.svg",
-        badge: "/medremind-icon-192.svg",
-        tag: `feedback-snooze-${data.medicineId}`,
+        body:    `You'll be reminded about ${data.medicineName || "your medication"} in 10 minutes.`,
+        icon:    "/medremind-icon-192.svg",
+        badge:   "/medremind-icon-192.svg",
+        tag:     `snooze-confirm-${data.medicineId}`,
         vibrate: [100, 50],
-        data: { url: "/dashboard" }
+        data:    { url: "/dashboard" }
       });
     })());
     return;
   }
 
-  // 3. User clicked "Refill Tracker" or main notification body
-  const targetUrl = action === "refill" 
-    ? `${self.location.origin}/refill` 
-    : (data.url || `${self.location.origin}/dashboard`);
+  // ── Default: Open/focus the app at the target URL ─────────────────────────
+  const targetUrl = action === "refill"
+    ? `${self.location.origin}/refill`
+    : (data.url ? `${self.location.origin}${data.url}` : `${self.location.origin}/dashboard`);
 
   event.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
@@ -582,5 +638,12 @@ self.addEventListener("notificationclick", (event) => {
   );
 });
 
-// Start heartbeat immediately on worker evaluation
-startAlarmHeartbeat();
+// ── Notification dismiss handler ──────────────────────────────────────────────
+self.addEventListener("notificationclose", (event) => {
+  // When user swipes away a medication notification, we note it but don't lock the dose.
+  // The reminder escalation on the backend will handle follow-up.
+  const data = event.notification.data || {};
+  if (data.source === "local" && data.medicineId) {
+    console.log(`[SW] Notification dismissed for ${data.medicineName} at ${data.scheduledTime}`);
+  }
+});

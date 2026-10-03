@@ -154,14 +154,20 @@ const startReminder = () => {
               }
             });
 
-            // Fire-and-forget push notification to avoid sequential network block
-            // Tag is stable per medicine+scheduledSlot — each new push REPLACES the
-            // previous notification for this slot on the phone. No stacking.
+            // Fire-and-forget push — MUST match SW tag format `local-med-{id}-{time}`
+            // so the server push REPLACES the local SW alarm notification (no doubling).
+            // Full payload (medicineId, scheduledTime) enables "Take Now" from the push.
             sendPushToUser(med.userId, {
-              title: `💊 Time to take ${med.name}${isSnoozeMaturing ? " (Snoozed)" : ""}`,
-              body:  `${med.dosage} — ${period}. Scheduled: ${originalScheduledTime}. Open MedRemind to confirm.`,
-              icon:  "/medremind-icon-192.svg",
-              tag:   `med-${med._id}-${originalScheduledTime}`
+              title:         `💊 Time to take ${med.name}${isSnoozeMaturing ? " (Snoozed)" : ""}`,
+              body:          `${med.dosage} — ${period}. Tap ✅ Take Now to confirm your dose.`,
+              icon:          "/medremind-icon-192.svg",
+              // Tag MUST match the SW local-alarm tag to replace it instead of duplicating
+              tag:           `local-med-${med._id}-${originalScheduledTime}`,
+              medicineId:    med._id.toString(),
+              medicineName:  med.name,
+              dosage:        med.dosage,
+              scheduledTime: originalScheduledTime,
+              url:           "/dashboard"
             }).then((ok) => {
               if (ok) console.log(`✅ Push sent: ${med.name} → user ${med.userId} at ${currentTime} (scheduled: ${originalScheduledTime})`);
             }).catch((e) => {
@@ -262,24 +268,30 @@ const startReminder = () => {
                 }
               }
 
-              // Send definitive locked push — same tag replaces all previous reminders
+              // Send definitive locked push — replaces all previous reminder notifications
               sendPushToUser(med.userId, {
-                title: `🚨 Dose Locked as Missed: ${med.name}`,
-                body:  `You missed ${med.name} (${med.dosage}) at ${sentTime} after ${threshold} reminders. This dose is now locked.`,
-                icon:  "/medremind-icon-192.svg",
-                tag:   `med-${med._id}-${sentTime}`
+                title:         `🚨 Dose Locked as Missed: ${med.name}`,
+                body:          `You missed ${med.name} (${med.dosage}) at ${sentTime} after ${threshold} reminders. This dose is now locked.`,
+                icon:          "/medremind-icon-192.svg",
+                tag:           `local-med-${med._id}-${sentTime}`,
+                medicineName:  med.name,
+                scheduledTime: sentTime,
+                url:           "/dashboard"
               }).catch(() => {});
 
               console.log(`🔒 Dose locked after reaching threshold (${threshold}x): ${med.name} → user ${med.userId}`);
             } else {
-              // Regular escalation push — reuses the SAME tag as the initial reminder
-              // so it REPLACES the previous notification. Phone shows one notification
-              // per medicine, always updated with the latest count.
+              // Escalation push — SAME tag replaces the previous one on device
               sendPushToUser(med.userId, {
-                title: `⏰ Reminder ${newMissedCount + 1}/${threshold}: Take ${med.name}`,
-                body:  `Please take ${med.name} (${med.dosage}) — scheduled at ${sentTime}. This is reminder ${newMissedCount + 1} of ${threshold}.`,
-                icon:  "/medremind-icon-192.svg",
-                tag:   `med-${med._id}-${sentTime}`
+                title:         `⏰ Reminder ${newMissedCount + 1}/${threshold}: Take ${med.name}`,
+                body:          `Please take ${med.name} (${med.dosage}) — scheduled at ${sentTime}. Tap ✅ Take Now to confirm.`,
+                icon:          "/medremind-icon-192.svg",
+                tag:           `local-med-${med._id}-${sentTime}`,
+                medicineId:    med._id.toString(),
+                medicineName:  med.name,
+                dosage:        med.dosage,
+                scheduledTime: sentTime,
+                url:           "/dashboard"
               }).catch(() => {});
 
               await Medicine.findByIdAndUpdate(med._id, { $set: { missedCount: newMissedCount } });
