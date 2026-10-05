@@ -97,17 +97,28 @@ const vapidHandler = (req, res) => {
 app.get("/api/vapid-public-key", vapidHandler);
 app.get("/vapid-public-key", vapidHandler);
 
-// Save or update push subscription for the logged-in user (support both paths)
+// Save or update push subscription for the logged-in user (multi-device support)
 const saveSubscriptionHandler = async (req, res) => {
   try {
     const { endpoint, keys } = req.body || {};
     if (!endpoint || !keys?.p256dh || !keys?.auth) {
       return res.status(400).json({ message: "Invalid subscription object" });
     }
+    const userAgent = req.headers["user-agent"] || "";
+    const subObj = { endpoint, keys, userAgent, updatedAt: new Date() };
+
+    // 1. Remove existing entry with same endpoint to avoid duplicates
     await User.findByIdAndUpdate(req.user.id, {
+      $pull: { pushSubscriptions: { endpoint } }
+    });
+
+    // 2. Add fresh subscription to array and set legacy single field
+    await User.findByIdAndUpdate(req.user.id, {
+      $push: { pushSubscriptions: subObj },
       $set: { pushSubscription: { endpoint, keys } }
     });
-    res.json({ message: "Subscription saved" });
+
+    res.json({ message: "Subscription saved", deviceRegistered: true });
   } catch (err) {
     console.error("save-subscription error:", err.message);
     res.status(500).json({ message: "Server error" });

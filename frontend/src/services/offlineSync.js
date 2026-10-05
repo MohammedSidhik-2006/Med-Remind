@@ -135,6 +135,7 @@ export async function syncMedicinesToOfflineStorage(medicines) {
           token:      localStorage.getItem("token"),
           apiBaseUrl: getApiBase()
         });
+        targetWorker.postMessage({ type: "CHECK_NOW" });
       }
     }
   } catch (err) {

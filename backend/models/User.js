@@ -5,7 +5,9 @@ const pushSubscriptionSchema = new mongoose.Schema({
   keys: {
     p256dh: { type: String, required: true },
     auth:   { type: String, required: true }
-  }
+  },
+  userAgent: { type: String, default: "" },
+  updatedAt: { type: Date, default: Date.now }
 }, { _id: false });
 
 const userSchema = new mongoose.Schema({
@@ -15,6 +17,7 @@ const userSchema = new mongoose.Schema({
   role:     { type: String, enum: ["user", "admin"], default: "user" },
   avatar:   { type: String, default: "👤" },
   pushSubscription: { type: pushSubscriptionSchema, default: null },
+  pushSubscriptions: { type: [pushSubscriptionSchema], default: [] },
   streak:         { type: Number, default: 0 },
   longestStreak:  { type: Number, default: 0 },
   lastStreakDate: { type: String, default: "" },
