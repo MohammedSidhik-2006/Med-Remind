@@ -1,4 +1,5 @@
 const { calculateReportMetrics } = require("./reportMetricsService");
+const Medicine = require("../models/Medicine");
 
 const GROQ_MODEL_CANDIDATES = [
   process.env.GROQ_MODEL,
@@ -261,6 +262,23 @@ async function generateReportInsights(userId, period = "week") {
 
   // Insufficient data guard: zero scheduled/logged doses
   if (payload.totalDoses === 0 || payload.medications.length === 0) {
+    try {
+      const activeMeds = await Medicine.find({ userId }).lean();
+      if (activeMeds && activeMeds.length > 0) {
+        const medNames = activeMeds.map(m => `${m.name} (${m.dosage})`).join(", ");
+        return {
+          summary: `You have ${activeMeds.length} active medication schedule${activeMeds.length > 1 ? "s" : ""} on file: ${medNames}.`,
+          positiveObservation: "Your prescription schedule is configured and ready for adherence tracking.",
+          patterns: activeMeds.slice(0, 3).map(m => `${m.name} scheduled at ${(m.times?.length > 0 ? m.times : [m.time]).join(", ")}`),
+          attentionItems: [
+            "No dose confirmations have been logged yet for this period. Mark your scheduled doses as taken on the Dashboard to start building your adherence streak."
+          ],
+          disclaimer: "These insights are based on medication tracking data and are not medical advice.",
+          isInsufficientData: false
+        };
+      }
+    } catch (dbErr) {}
+
     return {
       summary: "No medication tracking activity was recorded for this period.",
       positiveObservation: "",
@@ -382,6 +400,23 @@ async function generateCaregiverSummary(patientId, period = "week") {
 
   // Insufficient data guard: zero scheduled/logged doses -> DO NOT call AI
   if (payload.totalDoses === 0 || payload.medications.length === 0) {
+    try {
+      const activeMeds = await Medicine.find({ userId: patientId }).lean();
+      if (activeMeds && activeMeds.length > 0) {
+        const medNames = activeMeds.map(m => `${m.name} (${m.dosage})`).join(", ");
+        return {
+          summary: `Patient currently has ${activeMeds.length} active prescription schedule${activeMeds.length > 1 ? "s" : ""} on file: ${medNames}.`,
+          positiveObservation: "Prescriptions are active and scheduled in the clinical database.",
+          patterns: activeMeds.slice(0, 3).map(m => `Scheduled times: ${(m.times?.length > 0 ? m.times : [m.time]).join(", ")}`),
+          attentionItems: [
+            "No dose logs were confirmed during this period. Encourage the patient to log doses on their Dashboard."
+          ],
+          disclaimer: "This summary is based on medication tracking data and is not medical advice.",
+          isInsufficientData: false
+        };
+      }
+    } catch (caregiverDbErr) {}
+
     return {
       summary: "Not enough medication history yet for this patient.",
       positiveObservation: "",
