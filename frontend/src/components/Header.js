@@ -7,8 +7,21 @@ import API from "../services/api";
  */
 function Header({ onMenuToggle, title, subtitle, showBackButton, onBack, refreshTrigger }) {
   const navigate = useNavigate();
+  const getInitialNotifications = () => {
+    try {
+      const cached = localStorage.getItem("medremind_cached_medicines");
+      if (cached) {
+        const medList = JSON.parse(cached);
+        if (Array.isArray(medList)) {
+          return medList.filter(med => med && med.confirmationPending && !med.taken);
+        }
+      }
+    } catch {}
+    return [];
+  };
+
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [notifications, setNotifications] = useState([]);
+  const [notifications, setNotifications] = useState(getInitialNotifications);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const notificationRef = useRef(null);
@@ -175,16 +188,18 @@ function Header({ onMenuToggle, title, subtitle, showBackButton, onBack, refresh
           </svg>
         </button>
 
-        {/* Back button (optional) */}
+        {/* Interactive Back Button */}
         {showBackButton && (
           <button 
-            className="btn btn-ghost btn-icon"
+            className="header-back-btn"
             onClick={onBack}
             aria-label="Go back"
+            title="Go back to previous page"
           >
-            <svg className="icon icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <polyline points="15,18 9,12 15,6" />
+            <svg className="header-back-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M19 12H5M12 19l-7-7 7-7" />
             </svg>
+            <span className="header-back-label">Back</span>
           </button>
         )}
 
@@ -196,8 +211,9 @@ function Header({ onMenuToggle, title, subtitle, showBackButton, onBack, refresh
       </div>
 
       <div className="header-center">
-        {/* Date and time display (desktop only) */}
+        {/* Date and time display with Live Pulse Indicator */}
         <div className="header-datetime">
+          <span className="header-status-dot" title="Live Synced"></span>
           <span className="header-date text-sm font-medium text-secondary">
             {formatDate(currentTime)}
           </span>

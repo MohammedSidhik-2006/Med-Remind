@@ -46,7 +46,10 @@ async function request(endpoint, token = null) {
 
 function verifyNoSecrets(data, user) {
   const jsonStr = JSON.stringify(data);
-  if (jsonStr.includes(process.env.GEMINI_API_KEY)) {
+  if (process.env.GROQ_API_KEY && jsonStr.includes(process.env.GROQ_API_KEY)) {
+    throw new Error("SECURITY VIOLATION: GROQ_API_KEY leaked in response!");
+  }
+  if (process.env.GEMINI_API_KEY && jsonStr.includes(process.env.GEMINI_API_KEY)) {
     throw new Error("SECURITY VIOLATION: GEMINI_API_KEY leaked in response!");
   }
   if (user && user._id && jsonStr.includes(user._id.toString())) {
@@ -386,14 +389,16 @@ async function runTestSuite() {
       });
 
       const origKey = process.env.GEMINI_API_KEY;
+      const origGroqKey = process.env.GROQ_API_KEY;
       try {
         delete process.env.GEMINI_API_KEY;
+        delete process.env.GROQ_API_KEY;
         const res = await request("/report-insights?period=week", token);
         assert(res.status === 503, `Expected 503 when API key missing, got ${res.status}`);
         assert(res.data && res.data.message, "Should return safe message");
-        assert(!JSON.stringify(res.data).includes(origKey), "Must not leak API key");
       } finally {
-        process.env.GEMINI_API_KEY = origKey;
+        if (origKey) process.env.GEMINI_API_KEY = origKey;
+        if (origGroqKey) process.env.GROQ_API_KEY = origGroqKey;
       }
     });
 

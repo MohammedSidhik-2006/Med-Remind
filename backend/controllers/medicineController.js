@@ -295,12 +295,16 @@ exports.snoozeMedicine = async (req, res) => {
     if (!med) return res.status(404).json({ message: "Medicine not found" });
 
     const newSnoozeCount = (med.snoozeCount || 0) + 1;
+    const today = getLocalDate();
+    const scheduledTime = req.body.scheduledTime || (med.lastReminderSent ? med.lastReminderSent.split(" ")[1] : med.time);
 
     const updated = await Medicine.findByIdAndUpdate(
       req.params.id,
       { 
         $set: { 
           snoozedUntil: new Date(Date.now() + minutes * 60 * 1000), 
+          snoozedSlot: scheduledTime || "",
+          lastReminderSent: scheduledTime ? `${today} ${scheduledTime}` : med.lastReminderSent,
           confirmationPending: false,
           snoozeCount: newSnoozeCount
         } 

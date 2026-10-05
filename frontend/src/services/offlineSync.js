@@ -6,7 +6,7 @@
 import API from "./api";
 
 const DB_NAME    = "MedRemindOfflineDB";
-const DB_VERSION = 2; // Matches SW DB_VERSION
+const DB_VERSION = 3; // Matches SW DB_VERSION
 
 // ── Single global listener registration guard ────────────────────────────────
 // Prevents duplicate `MEDICINE_TAKEN_OFFLINE` event listeners when the user
@@ -49,6 +49,15 @@ function openDB() {
       if (!db.objectStoreNames.contains("notified_events")) {
         const store = db.createObjectStore("notified_events", { keyPath: "key" });
         try { store.createIndex("byTimestamp", "timestamp"); } catch {}
+      } else {
+        // v1→v2 upgrade: add index to existing store if missing
+        try {
+          const tx = e.target.transaction;
+          const store = tx.objectStore("notified_events");
+          if (!store.indexNames.contains("byTimestamp")) {
+            store.createIndex("byTimestamp", "timestamp");
+          }
+        } catch {}
       }
       if (!db.objectStoreNames.contains("offline_queue")) {
         db.createObjectStore("offline_queue", { keyPath: "id", autoIncrement: true });
@@ -264,4 +273,44 @@ export async function clearOfflineStorage() {
 
   // 3. Clear cached medicines from localStorage
   try { localStorage.removeItem("medremind_cached_medicines"); } catch {}
+}
+
+/**
+ * Flush any queued offline doses when browser goes online or on app mount.
+ * Provides fallback for browsers that don't support Service Worker background sync.
+ */
+export async function flushClientOfflineQueue() {
+  if (typeof window === "undefined" || !navigator.onLine) return;
+  try {
+    const db = await openDB();
+    if (!db || !db.objectStoreNames.contains("offline_queue")) return;
+
+    const tx = db.transaction("offline_queue", "readonly");
+    const req = tx.objectStore("offline_queue").getAll();
+    const items = await new Promise((res) => { req.onsuccess = () => res(req.result || []); req.onerror = () => res([]); });
+    if (!items || items.length === 0) return;
+
+    for (const item of items) {
+      try {
+        await API.patch(`/medicine/taken/${item.medicineId}`, { scheduledTime: item.scheduledTime });
+        const delTx = db.transaction("offline_queue", "readwrite");
+        delTx.objectStore("offline_queue").delete(item.id);
+      } catch (err) {
+        if (err.response?.status >= 400 && err.response?.status < 500) {
+          const delTx = db.transaction("offline_queue", "readwrite");
+          delTx.objectStore("offline_queue").delete(item.id);
+        } else {
+          break; // Stop iterating if offline / server unavailable
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("flushClientOfflineQueue error:", err);
+  }
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("online", () => {
+    flushClientOfflineQueue();
+  });
 }

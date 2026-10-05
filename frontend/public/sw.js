@@ -1,8 +1,8 @@
-// MedRemind Service Worker — Production-Grade Notification Engine v7
-// Fixes: timezone, double-fire, missing action data, duplicate intervals, cache bloat
-const CACHE_NAME = "medremind-v7";
+// MedRemind Service Worker — Production-Grade Notification Engine v8
+// Fixes: multi-dose snooze isolation, backend snooze sync, offline queue recovery
+const CACHE_NAME = "medremind-v8";
 const DB_NAME = "MedRemindOfflineDB";
-const DB_VERSION = 2; // Bumped to trigger onupgradeneeded for new store
+const DB_VERSION = 3; // Bumped for clean store migration
 
 // App shell files to pre-cache on install
 const APP_SHELL = [
@@ -48,8 +48,16 @@ function openDatabase() {
       }
       if (!db.objectStoreNames.contains("notified_events")) {
         const store = db.createObjectStore("notified_events", { keyPath: "key" });
-        // Index by timestamp so we can prune old entries efficiently
         store.createIndex("byTimestamp", "timestamp");
+      } else {
+        // v1→v2 upgrade: add byTimestamp index to existing store if missing
+        try {
+          const tx = e.target.transaction;
+          const store = tx.objectStore("notified_events");
+          if (!store.indexNames.contains("byTimestamp")) {
+            store.createIndex("byTimestamp", "timestamp");
+          }
+        } catch (indexErr) { /* Safe to skip — pruning will use fallback */ }
       }
       if (!db.objectStoreNames.contains("offline_queue")) {
         db.createObjectStore("offline_queue", { keyPath: "id", autoIncrement: true });
@@ -157,17 +165,23 @@ async function checkDueMedications() {
         ? med.times
         : (med.time ? [med.time] : []);
 
-      const isSnoozeMatured = med.snoozedUntil &&
+      let isSnoozeMatured = med.snoozedUntil &&
         new Date(med.snoozedUntil).getTime() <= nowMs;
+      const targetSnoozeSlot = med.snoozedSlot || (allTimes.length === 1 ? allTimes[0] : null);
 
       for (const slotTime of allTimes) {
         if (!slotTime) continue;
 
         const isCurrentSlot = (slotTime === currentTime);
-        if (!isCurrentSlot && !isSnoozeMatured) continue;
+        // Only fire if:
+        // A) It is the scheduled minute for this slot, OR
+        // B) A snooze matured specifically for this slot (or single-slot medicine)
+        const isThisSlotSnoozeMatured = isSnoozeMatured && (targetSnoozeSlot === slotTime);
+
+        if (!isCurrentSlot && !isThisSlotSnoozeMatured) continue;
 
         // If the dose was already taken (marked in local cache), skip
-        if (med.taken && !isSnoozeMatured) continue;
+        if (med.taken && !isThisSlotSnoozeMatured) continue;
 
         // Per-slot deduplication key — unique per day + medicine + scheduled time
         const slotKey = `${today}_${med._id}_${slotTime}`;
@@ -177,9 +191,11 @@ async function checkDueMedications() {
         // Mark as fired BEFORE showing notification to prevent race in fast intervals
         await putInStore(db, "notified_events", { key: slotKey, timestamp: nowMs });
 
-        if (isSnoozeMatured) {
-          // Clear snooze from local cache
+        if (isThisSlotSnoozeMatured) {
+          // Clear snooze from local cache and consume snooze flag for this evaluation pass
           med.snoozedUntil = null;
+          med.snoozedSlot  = null;
+          isSnoozeMatured  = false;
           await putInStore(db, "schedules", med);
         }
 
@@ -251,19 +267,25 @@ async function flushOfflineQueue() {
     const apiSetting = await getFromStore(db, "settings", "apiBaseUrl");
     const apiBase    = (apiSetting?.value || "https://medi-time-2peh.onrender.com").replace(/\/+$/, "");
 
+    const authHeader = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+
     for (const item of queue) {
       try {
         const res = await fetch(`${apiBase}/api/medicine/taken/${item.medicineId}`, {
           method:  "PATCH",
           headers: {
             "Content-Type":  "application/json",
-            "Authorization": `Bearer ${token}`
+            "Authorization": authHeader
           },
           body: JSON.stringify({ scheduledTime: item.scheduledTime })
         });
         if (res.ok) {
           await deleteFromStore(db, "offline_queue", item.id);
           console.log(`[SW] Offline dose synced: ${item.medicineId}`);
+        } else if (res.status >= 400 && res.status < 500) {
+          // Client error (e.g. dose already logged or medicine deleted) — remove to avoid blocking queue
+          await deleteFromStore(db, "offline_queue", item.id);
+          console.warn(`[SW] Removed non-retryable offline dose ${item.medicineId} (HTTP ${res.status})`);
         }
       } catch {
         break; // Still offline — retry on next sync event
@@ -554,7 +576,24 @@ self.addEventListener("notificationclick", (event) => {
         const med = await getFromStore(db, "schedules", data.medicineId);
         if (med) {
           med.stock = Math.max(0, (med.stock || 0) - 1);
-          med.taken = true;
+          if (data.scheduledTime) {
+            const todayLogs = Array.isArray(med.todayLogs) ? [...med.todayLogs] : [];
+            const logIdx = todayLogs.findIndex(l => l.scheduledTime === data.scheduledTime);
+            if (logIdx > -1) {
+              todayLogs[logIdx] = { ...todayLogs[logIdx], status: "taken", takenAt: new Date().toISOString() };
+            } else {
+              todayLogs.push({ scheduledTime: data.scheduledTime, status: "taken", takenAt: new Date().toISOString() });
+            }
+            med.todayLogs = todayLogs;
+          }
+          // Only mark fully taken for single-dose medicines.
+          // For multi-dose (times array > 1), the next SYNC_SCHEDULES from
+          // the Dashboard will set the correct value. Setting taken=true here
+          // would block the local heartbeat from firing for subsequent doses.
+          const allTimes = Array.isArray(med.times) && med.times.length > 1 ? med.times : [];
+          if (allTimes.length <= 1) {
+            med.taken = true;
+          }
           await putInStore(db, "schedules", med);
         }
 
@@ -595,6 +634,7 @@ self.addEventListener("notificationclick", (event) => {
         const med = await getFromStore(db, "schedules", data.medicineId);
         if (med) {
           med.snoozedUntil = snoozeUntilISO;
+          med.snoozedSlot  = data.scheduledTime || "";
           await putInStore(db, "schedules", med);
         }
 
@@ -603,6 +643,24 @@ self.addEventListener("notificationclick", (event) => {
           const { today } = getISTDateTime();
           const slotKey   = `${today}_${data.medicineId}_${data.scheduledTime}`;
           await deleteFromStore(db, "notified_events", slotKey);
+        }
+
+        // Synchronize snooze to backend to cancel pending escalation reminders
+        const tokenSetting = await getFromStore(db, "settings", "authToken");
+        const token        = tokenSetting?.value;
+        const apiSetting   = await getFromStore(db, "settings", "apiBaseUrl");
+        const apiBase      = (apiSetting?.value || "https://medi-time-2peh.onrender.com").replace(/\/+$/, "");
+
+        if (token) {
+          const authHeader = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+          fetch(`${apiBase}/api/medicine/snooze/${data.medicineId}`, {
+            method:  "PATCH",
+            headers: {
+              "Content-Type":  "application/json",
+              "Authorization": authHeader
+            },
+            body: JSON.stringify({ minutes: 10, scheduledTime: data.scheduledTime })
+          }).catch((err) => console.warn("[SW] Snooze sync to backend skipped/offline:", err));
         }
       } catch (e) {
         console.warn("[SW] Snooze cache update error:", e);

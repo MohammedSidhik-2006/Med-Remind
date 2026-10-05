@@ -21,6 +21,7 @@ const medicineSchema = new mongoose.Schema({
   notes: { type: String, default: "", trim: true },
   lastResetDate: { type: String, default: "" },
   snoozedUntil: { type: Date, default: null },
+  snoozedSlot: { type: String, default: "" },
   snoozeCount: { type: Number, default: 0, min: 0 }
 }, { timestamps: true });
 

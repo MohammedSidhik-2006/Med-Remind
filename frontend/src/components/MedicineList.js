@@ -267,6 +267,7 @@ function MedicineList({ medicines, setMedicines, loading, refreshMedicines, navi
         return { 
           ...m, 
           snoozedUntil: new Date(Date.now() + minutes * 60 * 1000).toISOString(),
+          snoozedSlot: slotTime,
           lastReminderSent: `${getLocalDate()} ${slotTime}`,
           confirmationPending: false 
         };
@@ -276,7 +277,7 @@ function MedicineList({ medicines, setMedicines, loading, refreshMedicines, navi
     setSnoozeTarget(null);
 
     try {
-      await API.patch(`/medicine/snooze/${targetId}`, { minutes });
+      await API.patch(`/medicine/snooze/${targetId}`, { minutes, scheduledTime: slotTime });
       refreshMedicines();
     } catch (err) {
       setMedicines(backup);

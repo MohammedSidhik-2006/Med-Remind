@@ -1,12 +1,17 @@
-const { GoogleGenAI } = require("@google/genai");
 const { calculateReportMetrics } = require("./reportMetricsService");
 
-const MODEL_CANDIDATES = [
+const GROQ_MODEL_CANDIDATES = [
+  process.env.GROQ_MODEL,
+  "openai/gpt-oss-120b",
+  "openai/gpt-oss-20b",
+  "qwen/qwen3.8-27b"
+].filter(Boolean);
+
+const GEMINI_MODEL_CANDIDATES = [
   process.env.GEMINI_MODEL,
-  "gemini-3.5-flash-lite",
-  "gemini-flash-lite-latest",
+  "gemini-2.5-flash-lite",
   "gemini-flash-latest",
-  "gemini-3.8-flash"
+  "gemini-2.5-flash"
 ].filter(Boolean);
 
 // In-memory cache to prevent quota exhaustion when user repeatedly views or clicks Generate Insights
@@ -14,12 +19,69 @@ const insightCache = new Map();
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes TTL
 
 /**
- * Resilient multi-model executor: tries high-quota candidates sequentially.
- * Prevents 429 quota exhaustion or single-model outages from failing requests.
+ * Resilient Groq multi-model executor: tries candidate models sequentially.
+ * Uses high-speed OpenAI-compatible chat completions with structured JSON response format.
  */
-async function executeModelCascade(ai, prompt, logTag = "AI Service") {
+async function executeGroqCascade(apiKey, systemPrompt, userPrompt, logTag = "AI Service") {
   let lastError = null;
-  for (const model of MODEL_CANDIDATES) {
+
+  for (const model of GROQ_MODEL_CANDIDATES) {
+    try {
+      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt }
+          ],
+          response_format: { type: "json_object" },
+          temperature: 0.2
+        }),
+        signal: AbortSignal.timeout(15000)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const status = response.status;
+        const msg = errorData.error?.message || `HTTP ${status}`;
+        console.warn(`[${logTag}] Groq model (${model}) returned HTTP ${status}: ${msg}. Trying next candidate...`);
+        const err = new Error(msg);
+        err.status = status;
+        lastError = err;
+        continue;
+      }
+
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content;
+      if (content) {
+        return content;
+      }
+    } catch (err) {
+      console.warn(`[${logTag}] Groq model (${model}) error: ${err.message?.slice(0, 100)}. Trying next candidate...`);
+      lastError = err;
+    }
+  }
+
+  console.error(`[${logTag}] All Groq candidate models failed.`);
+  const finalErr = new Error(lastError?.message || "Groq AI service unavailable");
+  finalErr.status = lastError?.status || 503;
+  throw finalErr;
+}
+
+/**
+ * Fallback Gemini multi-model executor in case GoogleGenAI is configured
+ */
+async function executeGeminiCascade(apiKey, prompt, logTag = "AI Service") {
+  const { GoogleGenAI } = require("@google/genai");
+  const ai = new GoogleGenAI({ apiKey });
+  let lastError = null;
+
+  for (const model of GEMINI_MODEL_CANDIDATES) {
     try {
       const res = await ai.models.generateContent({
         model,
@@ -33,16 +95,44 @@ async function executeModelCascade(ai, prompt, logTag = "AI Service") {
         return res.text;
       }
     } catch (err) {
-      console.warn(`[${logTag}] Model (${model}) attempt note: ${err.message?.slice(0, 100)}. Falling back to next candidate...`);
+      console.warn(`[${logTag}] Gemini model (${model}) attempt note: ${err.message?.slice(0, 100)}. Falling back to next candidate...`);
       lastError = err;
     }
   }
-  console.error(`[${logTag}] All candidate models failed.`);
+
+  console.error(`[${logTag}] All Gemini candidate models failed.`);
   const finalErr = new Error(lastError?.message || "Gemini service unavailable");
   finalErr.status = lastError?.status || 503;
   throw finalErr;
 }
 
+/**
+ * Unified AI executor: prioritizes Groq, falls back to Gemini if available
+ */
+async function executeAiGeneration(systemPrompt, userPrompt, logTag = "AI Service") {
+  const groqKey = process.env.GROQ_API_KEY;
+  const geminiKey = process.env.GEMINI_API_KEY;
+
+  if (groqKey) {
+    try {
+      return await executeGroqCascade(groqKey, systemPrompt, userPrompt, logTag);
+    } catch (groqErr) {
+      console.warn(`[${logTag}] Groq execution failed, checking for Gemini fallback:`, groqErr.message);
+      if (geminiKey) {
+        return await executeGeminiCascade(geminiKey, `${systemPrompt}\n\n${userPrompt}`, logTag);
+      }
+      throw groqErr;
+    }
+  }
+
+  if (geminiKey) {
+    return await executeGeminiCascade(geminiKey, `${systemPrompt}\n\n${userPrompt}`, logTag);
+  }
+
+  const error = new Error("Neither GROQ_API_KEY nor GEMINI_API_KEY is configured");
+  error.code = "MISSING_API_KEY";
+  throw error;
+}
 
 /**
  * Maps HH:MM time strings into standard day phases
@@ -63,7 +153,7 @@ const getTimeOfDayCategory = (timeStr) => {
  *
  * @param {string} userId
  * @param {string} period - "week" or "month"
- * @returns {Promise<Object>} Factual sanitized payload for Gemini
+ * @returns {Promise<Object>} Factual sanitized payload for AI
  */
 async function buildAiInsightPayload(userId, period = "week") {
   const metrics = await calculateReportMetrics(userId, period);
@@ -124,7 +214,7 @@ async function buildAiInsightPayload(userId, period = "week") {
 }
 
 /**
- * Validates and normalizes structured response from Gemini
+ * Validates and normalizes structured response from AI model
  */
 function validateAndCleanResponse(data) {
   const disclaimerText = "These insights are based on medication tracking data and are not medical advice.";
@@ -159,21 +249,14 @@ function validateAndCleanResponse(data) {
 }
 
 /**
- * Generates AI Report Insights using Google Gemini.
- * Gemini serves exclusively as an interpretation layer explaining pre-calculated factual data.
+ * Generates AI Report Insights using Groq (with Gemini fallback).
+ * Serves exclusively as an interpretation layer explaining pre-calculated factual data.
  *
  * @param {string} userId
  * @param {string} period - "week" or "month"
  * @returns {Promise<Object>} Safe structured insight response
  */
 async function generateReportInsights(userId, period = "week") {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    const error = new Error("GEMINI_API_KEY is not configured");
-    error.code = "MISSING_API_KEY";
-    throw error;
-  }
-
   const payload = await buildAiInsightPayload(userId, period);
 
   // Insufficient data guard: zero scheduled/logged doses
@@ -208,15 +291,11 @@ async function generateReportInsights(userId, period = "week") {
     trackingOverview: payload.trackingOverview
   };
 
-  const prompt = `
-You are the MedRemind AI Insight Engine.
+  const systemPrompt = `You are the MedRemind AI Insight Engine.
 Your role is EXCLUSIVELY to interpret and explain the provided medication adherence report data for the user.
 
-FACTUAL DATA:
-${JSON.stringify(modelPayload, null, 2)}
-
 STRICT CONSTRAINTS:
-1. Base all commentary EXCLUSIVELY on the factual data provided in the JSON payload above.
+1. Base all commentary EXCLUSIVELY on the factual data provided in the JSON payload.
 2. Do NOT invent, assume, extrapolate, or recalculate statistics or numbers.
 3. Do NOT provide medical advice, medical claims, diagnosis, or clinical assessments.
 4. Do NOT recommend starting, stopping, increasing, decreasing, or altering any medication or dosage.
@@ -236,11 +315,11 @@ REQUIRED JSON SCHEMA:
     "Observed area deserving attention supported directly by the data (maximum 3 items). Empty array if adherence is 100%."
   ],
   "disclaimer": "These insights are based on medication tracking data and are not medical advice."
-}
-`;
+}`;
 
-  const ai = new GoogleGenAI({ apiKey });
-  const responseText = await executeModelCascade(ai, prompt, "AI Report Service");
+  const userPrompt = `FACTUAL DATA:\n${JSON.stringify(modelPayload, null, 2)}`;
+
+  const responseText = await executeAiGeneration(systemPrompt, userPrompt, "AI Report Service");
 
   try {
     const parsed = JSON.parse(responseText);
@@ -248,7 +327,7 @@ REQUIRED JSON SCHEMA:
     insightCache.set(cacheKey, { data: cleanResult, expiresAt: Date.now() + CACHE_TTL_MS });
     return cleanResult;
   } catch (parseErr) {
-    console.error("[AI Service] JSON parsing failed from Gemini response:", parseErr.message, "Response was:", responseText);
+    console.error("[AI Service] JSON parsing failed from AI response:", parseErr.message, "Response was:", responseText);
     const err = new Error("Malformed response received from AI model");
     err.status = 502;
     throw err;
@@ -256,7 +335,7 @@ REQUIRED JSON SCHEMA:
 }
 
 /**
- * Validates and normalizes structured Caregiver Summary response from Gemini
+ * Validates and normalizes structured Caregiver Summary response from AI
  */
 function validateAndCleanCaregiverResponse(data) {
   const disclaimerText = "This summary is based on medication tracking data and is not medical advice.";
@@ -291,7 +370,7 @@ function validateAndCleanCaregiverResponse(data) {
 }
 
 /**
- * Generates an AI Caregiver Summary using Google Gemini for an authorized caregiver.
+ * Generates an AI Caregiver Summary using Groq (with Gemini fallback) for an authorized caregiver.
  * Privacy-safe: strictly contains no IDs, emails, personal names, or relationship labels.
  *
  * @param {string} patientId
@@ -299,16 +378,9 @@ function validateAndCleanCaregiverResponse(data) {
  * @returns {Promise<Object>} Structured Caregiver Summary
  */
 async function generateCaregiverSummary(patientId, period = "week") {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    const error = new Error("GEMINI_API_KEY is not configured");
-    error.code = "MISSING_API_KEY";
-    throw error;
-  }
-
   const payload = await buildAiInsightPayload(patientId, period);
 
-  // Insufficient data guard: zero scheduled/logged doses -> DO NOT call Gemini
+  // Insufficient data guard: zero scheduled/logged doses -> DO NOT call AI
   if (payload.totalDoses === 0 || payload.medications.length === 0) {
     return {
       summary: "Not enough medication history yet for this patient.",
@@ -339,15 +411,11 @@ async function generateCaregiverSummary(patientId, period = "week") {
     trackingOverview: payload.trackingOverview
   };
 
-  const prompt = `
-You are the MedRemind AI Caregiver Assistant.
+  const systemPrompt = `You are the MedRemind AI Caregiver Assistant.
 Your role is EXCLUSIVELY to interpret and summarize the provided patient medication adherence tracking data for their authorized caregiver.
 
-FACTUAL TRACKING DATA:
-${JSON.stringify(modelPayload, null, 2)}
-
 STRICT SAFETY AND PRIVACY RULES:
-1. Base all commentary EXCLUSIVELY on the factual tracking data provided in the JSON payload above.
+1. Base all commentary EXCLUSIVELY on the factual tracking data provided in the JSON payload.
 2. Do NOT invent, assume, extrapolate, or recalculate statistics or numbers.
 3. Do NOT provide medical advice, diagnosis, treatment advice, or clinical assessments.
 4. Do NOT recommend starting, stopping, increasing, decreasing, or altering any medication or dosage.
@@ -369,11 +437,11 @@ REQUIRED JSON SCHEMA:
     "Observed tracking area deserving caregiver attention supported directly by the data, such as missed doses (maximum 3 items). Empty array if adherence is 100% or no misses recorded."
   ],
   "disclaimer": "This summary is based on medication tracking data and is not medical advice."
-}
-`;
+}`;
 
-  const ai = new GoogleGenAI({ apiKey });
-  const responseText = await executeModelCascade(ai, prompt, "AI Caregiver Service");
+  const userPrompt = `FACTUAL TRACKING DATA:\n${JSON.stringify(modelPayload, null, 2)}`;
+
+  const responseText = await executeAiGeneration(systemPrompt, userPrompt, "AI Caregiver Service");
 
   try {
     const parsed = JSON.parse(responseText);
@@ -381,7 +449,7 @@ REQUIRED JSON SCHEMA:
     insightCache.set(cacheKey, { data: cleanResult, expiresAt: Date.now() + CACHE_TTL_MS });
     return cleanResult;
   } catch (parseErr) {
-    console.error("[AI Caregiver Service] JSON parsing failed from Gemini response:", parseErr.message, "Response was:", responseText);
+    console.error("[AI Caregiver Service] JSON parsing failed from AI response:", parseErr.message, "Response was:", responseText);
     const err = new Error("Malformed response received from AI model");
     err.status = 502;
     throw err;

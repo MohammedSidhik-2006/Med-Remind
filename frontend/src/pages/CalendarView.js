@@ -150,27 +150,13 @@ function CalendarView() {
   const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
 
   return (
-    <AppShell>
+    <AppShell
+      title="Medication Calendar"
+      subtitle="Track your medication schedule and adherence history"
+      showBackButton
+      onBack={() => navigate("/dashboard")}
+    >
       <div className="calendar-page-wrapper">
-        {/* Page Header */}
-        <div style={{ marginBottom: "var(--space-8)" }}>
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={() => navigate("/dashboard")}
-            style={{ marginBottom: "var(--space-4)" }}
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="m15 18-6-6 6-6"/>
-            </svg>
-            Back
-          </Button>
-          <div>
-            <h1 style={{ margin: "0 0 var(--space-2) 0", color: "var(--text-primary)" }}>Medication Calendar</h1>
-            <p style={{ color: "var(--text-secondary)", margin: "0" }}>Track your medication schedule and adherence history</p>
-          </div>
-        </div>
-
         <div className="calendar-two-col">
           {/* Calendar Card */}
           <Card>

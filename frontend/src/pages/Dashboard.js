@@ -13,16 +13,99 @@ import "./Dashboard.css";
  * Modern Dashboard - The heart of MedRemind
  * Redesigned with human-centered healthcare UX principles
  */
+const hasCachedData = () => {
+  try {
+    return localStorage.getItem("medremind_cached_medicines") !== null || sessionStorage.getItem("medremind_session_loaded") === "1";
+  } catch {
+    return false;
+  }
+};
+
+const getInitialMedicines = () => {
+  try {
+    const cached = localStorage.getItem("medremind_cached_medicines");
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch {}
+  return [];
+};
+
+const getInitialReports = () => {
+  try {
+    const cached = localStorage.getItem("medremind_cached_reports");
+    if (cached) {
+      return JSON.parse(cached);
+    }
+  } catch {}
+  return { streak: 0, overallAdherence: 0 };
+};
+
+const calculateStatsFromMeds = (medList) => {
+  if (!Array.isArray(medList) || medList.length === 0) {
+    return { taken: 0, pending: 0, missed: 0, total: 0 };
+  }
+  const now = new Date();
+  const today = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(now);
+
+  const activeMedicines = medList.filter(med => {
+    if (!med) return false;
+    if (med.startDate && today < med.startDate) return false;
+    if (med.endDate && today > med.endDate) return false;
+    return true;
+  });
+
+  let totalScheduled = 0;
+  let totalTaken = 0;
+  let totalMissed = 0;
+  let totalPending = 0;
+
+  activeMedicines.forEach(med => {
+    const times = Array.isArray(med.times) && med.times.length > 0 ? med.times : (med.time ? [med.time] : []);
+    times.forEach((slotTime) => {
+      totalScheduled++;
+      const slotLog = Array.isArray(med.todayLogs) ? med.todayLogs.find(log => 
+        log && log.scheduledTime === slotTime
+      ) : null;
+      
+      if (slotLog) {
+        if (slotLog.status === "taken") totalTaken++;
+        else if (slotLog.status === "missed") totalMissed++;
+        else totalPending++;
+      } else {
+        totalPending++;
+      }
+    });
+  });
+
+  return { taken: totalTaken, missed: totalMissed, pending: totalPending, total: totalScheduled };
+};
+
+/**
+ * Modern Dashboard - The heart of MedRemind
+ * Redesigned with human-centered healthcare UX principles
+ */
 function Dashboard() {
   const navigate = useNavigate();
   const { addToast } = useToast();
   
-  // Core state
-  const [medicines, setMedicines] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({ taken: 0, pending: 0, missed: 0, total: 0 });
-  const [adherenceRate, setAdherenceRate] = useState(0);
-  const [streak, setStreak] = useState(0);
+  // Instant synchronous cache hydration (zero-flicker on navigation)
+  const alreadyHydrated = hasCachedData();
+  const initialMeds = getInitialMedicines();
+  const initialReports = getInitialReports();
+  
+  // Core state: if already hydrated from cache/session, never flash the skeleton loader
+  const [medicines, setMedicines] = useState(initialMeds);
+  const [loading, setLoading] = useState(!alreadyHydrated && initialMeds.length === 0);
+  const [stats, setStats] = useState(() => calculateStatsFromMeds(initialMeds));
+  const [adherenceRate, setAdherenceRate] = useState(initialReports.overallAdherence || 0);
+  const [streak, setStreak] = useState(initialReports.streak || 0);
   const [notificationRefreshTrigger, setNotificationRefreshTrigger] = useState(0);
   
   // Push notification state  
@@ -62,7 +145,7 @@ function Dashboard() {
   const user = getUserInfo();
 
   // Fetch dashboard data
-  const fetchDashboardData = useCallback(async (showLoading = true) => {
+  const fetchDashboardData = useCallback(async (showLoading = false) => {
     if (showLoading) setLoading(true);
     
     try {
@@ -82,21 +165,21 @@ function Dashboard() {
       setStreak(reportsData.streak || 0);
       setAdherenceRate(reportsData.overallAdherence || 0);
 
-      // Cache medicines locally for offline viewing and background alarms
+      // Cache medicines & reports locally for instant zero-flicker rehydration
       try {
         localStorage.setItem("medremind_cached_medicines", JSON.stringify(medicinesData));
+        localStorage.setItem("medremind_cached_reports", JSON.stringify(reportsData));
         syncMedicinesToOfflineStorage(medicinesData);
       } catch (storageErr) {}
 
       // Compute today in IST (UTC+5:30) to match backend TZ=Asia/Kolkata
-      // Using Intl.DateTimeFormat ensures correctness regardless of user's browser timezone
       const now = new Date();
       const todayIST = new Intl.DateTimeFormat("en-CA", {
         timeZone: "Asia/Kolkata",
         year: "numeric",
         month: "2-digit",
         day: "2-digit"
-      }).format(now); // Returns "YYYY-MM-DD" format
+      }).format(now);
       const today = todayIST;
 
       const activeMedicines = medicinesData.filter(med => {
@@ -136,8 +219,9 @@ function Dashboard() {
         total: totalScheduled
       });
 
-      // Trigger notification refresh in Header
-      setNotificationRefreshTrigger(prev => prev + 1);
+      try {
+        sessionStorage.setItem("medremind_session_loaded", "1");
+      } catch {}
 
       return medicinesData; // Return for chaining
 
@@ -161,12 +245,14 @@ function Dashboard() {
   }, [addToast]);
 
   useEffect(() => {
-    fetchDashboardData();
+    // Only show full loading skeleton if cold start with zero cached items
+    const isColdStart = !alreadyHydrated && initialMeds.length === 0;
+    fetchDashboardData(isColdStart);
     
     // Set up periodic refresh
     const interval = setInterval(() => fetchDashboardData(false), 30000);
     return () => clearInterval(interval);
-  }, [fetchDashboardData]);
+  }, [fetchDashboardData, alreadyHydrated, initialMeds.length]);
 
   // Push notification setup
   useEffect(() => {
@@ -231,9 +317,9 @@ function Dashboard() {
       }
 
       // 2. Fetch authoritative server state immediately, and re-check after brief interval
+      setNotificationRefreshTrigger(prev => prev + 1);
       fetchDashboardData(false);
-      const timer = setTimeout(() => fetchDashboardData(false), 1500);
-      return () => clearTimeout(timer);
+      setTimeout(() => fetchDashboardData(false), 1500);
     };
 
     window.addEventListener("medremind-dose-taken-offline", handleOfflineDose);

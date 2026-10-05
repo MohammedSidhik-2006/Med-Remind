@@ -8,6 +8,11 @@ const connectDB = async () => {
     });
     console.log("✅ MongoDB Connected");
 
+    // Safe index cleanup: Drop legacy index that blocked multi-dose daily logging
+    try {
+      await mongoose.connection.collection("doselogs").dropIndex("userId_1_medicineId_1_date_1").catch(() => {});
+    } catch {}
+
     mongoose.connection.on("disconnected", () => {
       console.warn("⚠️  MongoDB disconnected — attempting reconnect...");
     });

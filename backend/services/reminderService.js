@@ -134,13 +134,15 @@ const startReminder = () => {
 
           if (isScheduledTime || isSnoozeMaturing) {
             const period       = getTimePeriod(currentTime);
-            const originalScheduledTime = isScheduledTime ? currentTime : (med.lastReminderSent ? med.lastReminderSent.split(" ")[1] : currentTime);
+            const originalScheduledTime = isScheduledTime 
+              ? currentTime 
+              : (med.snoozedSlot || (med.lastReminderSent ? med.lastReminderSent.split(" ")[1] : currentTime));
 
             // Before firing, ensure the user didn't ALREADY take this exact dose ahead of time
             const alreadyTaken = await DoseLog.findOne({ medicineId: med._id, date: today, scheduledTime: originalScheduledTime, status: "taken" });
             if (alreadyTaken) {
               // Already handled! Clear the snooze bypass safely if it was stuck
-              if (isSnoozeMaturing) await Medicine.findByIdAndUpdate(med._id, { $set: { snoozedUntil: null } });
+              if (isSnoozeMaturing) await Medicine.findByIdAndUpdate(med._id, { $set: { snoozedUntil: null, snoozedSlot: "" } });
               continue;
             }
 
@@ -149,6 +151,7 @@ const startReminder = () => {
                 confirmationPending: true, 
                 lastReminderSent: reminderKey,
                 snoozedUntil: null, // Clear matured snooze lock natively
+                snoozedSlot: "",    // Clear matured snooze slot natively
                 taken: false, // Re-open UI for upcoming secondary doses automatically
                 missedCount: 0 // Reset missed count for the new slot
               }
@@ -194,28 +197,14 @@ const startReminder = () => {
             const [year, month, day] = sentDate.split("-").map(Number);
             const [hour, minute] = sentTime.split(":").map(Number);
             
-            // Parse sent time correctly: create a date with the tz timezone context
-            const tz = process.env.TZ || "Asia/Kolkata";
-            
-            // Helper: Create a Date object representing local time in the specified timezone
-            const createDateInTZ = (y, mo, d, h, mi) => {
-              // Create UTC date first
-              const utcDate = new Date(Date.UTC(y, mo - 1, d, h, mi));
-              // Get the difference between what this UTC time would show in the TZ vs UTC
-              const formatter = new Intl.DateTimeFormat("en-US", {
-                timeZone: tz,
-                year: "numeric", month: "2-digit", day: "2-digit",
-                hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false
-              });
-              const parts = formatter.formatToParts(utcDate);
-              const getP = type => parts.find(p => p.type === type).value;
-              const tzOffsetMS = utcDate - new Date(
-                `${getP("year")}-${getP("month")}-${getP("day")}T${getP("hour")}:${getP("minute")}:${getP("second")}Z`
-              );
-              return new Date(utcDate.getTime() - tzOffsetMS);
-            };
-            
-            const sentTime_ms = createDateInTZ(year, month, day, hour, minute).getTime();
+            // Convert IST time components to UTC milliseconds.
+            // IST is always UTC+5:30 (India has no DST), so:
+            //   UTC = IST - 5h30m
+            // This is intentionally simple — the previous createDateInTZ function had
+            // an inverted offset that caused diffMinutes to be negative, which meant
+            // escalation reminders NEVER fired and missed doses were never locked.
+            const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+            const sentTime_ms = Date.UTC(year, month - 1, day, hour, minute) - IST_OFFSET_MS;
             const currTime_ms = now.getTime();
             const diffMinutes = Math.floor((currTime_ms - sentTime_ms) / (1000 * 60));
 

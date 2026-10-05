@@ -85,7 +85,12 @@ function RefillTracker() {
         <Navbar onToggleSidebar={() => setIsSidebarOpen(true)} />
 
         <header className="page-header">
-          <button className="back-btn" onClick={() => navigate("/dashboard")}>←</button>
+          <button className="back-btn" onClick={() => navigate("/dashboard")} aria-label="Go back" title="Go back to Dashboard">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M19 12H5M12 19l-7-7 7-7" />
+            </svg>
+            <span>Back</span>
+          </button>
           <h2 className="page-title">Refill Tracker</h2>
         </header>
 
