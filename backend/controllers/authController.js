@@ -52,11 +52,14 @@ exports.register = async (req, res) => {
       return res.status(409).json({ message: "Email already registered" });
 
     const hashedPassword = await bcrypt.hash(password, 12);
-    await User.create({ name, email, password: hashedPassword, avatar });
+    await User.create({ name, email, password: hashedPassword, avatar, role: "user" });
 
     console.log(`✅ Registered: ${email}`);
     res.status(201).json({ message: "Account created successfully" });
   } catch (error) {
+    if (error.code === 11000 || error.message?.includes("E11000")) {
+      return res.status(409).json({ message: "Email already registered" });
+    }
     console.error("Register error:", error.message);
     res.status(500).json({ message: "Server error" });
   }
