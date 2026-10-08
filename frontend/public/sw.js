@@ -1,6 +1,6 @@
-// MedRemind Service Worker — Production-Grade Notification Engine v8
-// Fixes: multi-dose snooze isolation, backend snooze sync, offline queue recovery
-const CACHE_NAME = "medremind-v8";
+// MedRemind Service Worker — Production-Grade Notification Engine v9
+// Fixes: automatic daily state reset, slot-level taken checks, multi-day background alarms
+const CACHE_NAME = "medremind-v9";
 const DB_NAME = "MedRemindOfflineDB";
 const DB_VERSION = 3; // Bumped for clean store migration
 
@@ -140,7 +140,7 @@ async function pruneNotifiedEvents(db) {
 // ── Core: Check and fire due medication notifications ─────────────────────────
 // Uses IST time so notifications fire correctly regardless of device locale.
 // Deduplicates per slot per day so only one notification fires per medicine per time.
-// Does NOT fire if the server already sent a push (prevents doubling).
+// Auto-resets daily state so doses from yesterday NEVER block today's alarms.
 async function checkDueMedications() {
   try {
     const db = await openDatabase();
@@ -156,6 +156,17 @@ async function checkDueMedications() {
 
     for (const med of schedules) {
       if (!med || !med.name) continue;
+
+      // Automatic daily reset for IndexedDB cache:
+      // If the schedule was last reset on a previous day, clear yesterday's taken flags and logs
+      if (med.lastResetDate && med.lastResetDate !== today) {
+        med.taken = false;
+        med.todayLogs = [];
+        med.lastResetDate = today;
+        med.snoozedUntil = null;
+        med.snoozedSlot = null;
+        await putInStore(db, "schedules", med);
+      }
 
       // Respect medicine start/end date window
       if (med.startDate && today < med.startDate) continue;
@@ -180,8 +191,11 @@ async function checkDueMedications() {
 
         if (!isCurrentSlot && !isThisSlotSnoozeMatured) continue;
 
-        // If the dose was already taken (marked in local cache), skip
-        if (med.taken && !isThisSlotSnoozeMatured) continue;
+        // Slot-level taken check: only skip if THIS SPECIFIC slot was confirmed today
+        const isSlotTakenToday = Array.isArray(med.todayLogs) && med.todayLogs.some(
+          log => log.scheduledTime === slotTime && log.status === "taken"
+        );
+        if (isSlotTakenToday && !isThisSlotSnoozeMatured) continue;
 
         // Per-slot deduplication key — unique per day + medicine + scheduled time
         const slotKey = `${today}_${med._id}_${slotTime}`;
@@ -594,6 +608,7 @@ self.addEventListener("notificationclick", (event) => {
           if (allTimes.length <= 1) {
             med.taken = true;
           }
+          med.lastResetDate = getISTDateTime().today;
           await putInStore(db, "schedules", med);
         }
 

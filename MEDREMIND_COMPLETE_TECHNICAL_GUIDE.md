@@ -688,5 +688,6 @@ This executes atomically inside the MongoDB database engine and guarantees stock
 #### Q10: How does your AI pipeline handle model rate limits or API downtime?
 *Answer:* We implemented a 3-tier resilient cascade in [`aiReportService.js`](file:///c:/Users/DELL/Downloads/medremind-mern/backend/services/aiReportService.js):
 1. Primary: Groq LPU high-speed multi-model cascade (`gpt-oss-120b`, `gpt-oss-20b`, `qwen3.8-27b`).
+1. Primary: Groq LPU high-speed multi-model cascade (`gpt-oss-120b`, `gpt-oss-20b`, `qwen3.8-27b`).
 2. Secondary: Google Gemini Flash (`@google/genai`).
 3. Tertiary: Instant client-side clinical heuristics in [`Reports.js`](file:///c:/Users/DELL/Downloads/medremind-mern/frontend/src/pages/Reports.js#L94), ensuring the user interface never breaks even during total API outages.

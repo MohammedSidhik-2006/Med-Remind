@@ -150,6 +150,7 @@ const startReminder = () => {
               $set: { 
                 confirmationPending: true, 
                 lastReminderSent: reminderKey,
+                lastResetDate: today,
                 snoozedUntil: null, // Clear matured snooze lock natively
                 snoozedSlot: "",    // Clear matured snooze slot natively
                 taken: false, // Re-open UI for upcoming secondary doses automatically
@@ -313,10 +314,8 @@ const startReminder = () => {
         }
       }
 
-      // ── 3. Daily reset window: 08:00–08:05 (robust against Render cold-start restarts) ─────────
-      // Using a 5-minute window instead of exact 08:00 match prevents missed resets
-      // when the server restarts between 07:59-08:01. lastResetDate prevents double-runs.
-      if (currentTime >= "08:00" && currentTime <= "08:05") {
+      // ── 3. Daily reset & catch-up (runs periodically & in morning window to handle sleeping servers) ─────────
+      if ((currentTime >= "08:00" && currentTime <= "08:05") || nowMinutes % 15 === 0) {
         try {
           const { catchUpMedicinesForUser } = require("../middleware/catchUpMiddleware");
           const staleMeds = await Medicine.find({ lastResetDate: { $ne: today } });
@@ -324,7 +323,7 @@ const startReminder = () => {
           for (const uId of userIds) {
             await catchUpMedicinesForUser(uId);
           }
-          if (userIds.length > 0) {
+          if (userIds.length > 0 && currentTime >= "08:00" && currentTime <= "08:05") {
             console.log(`✅ Daily reset & catch-up complete for ${today} (${userIds.length} users)`);
           }
         } catch (err) {

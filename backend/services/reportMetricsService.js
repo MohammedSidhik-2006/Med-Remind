@@ -87,6 +87,7 @@ async function calculateReportMetrics(userId, period = "week") {
 
   let streak = 0;
   let checkDate = new Date();
+  checkDate.setHours(12, 0, 0, 0); // Anchor to midday to prevent timezone edge drift
   const todayStr = getLocalDate(checkDate);
   const todayData = byDate[todayStr];
 
@@ -105,6 +106,10 @@ async function calculateReportMetrics(userId, period = "week") {
     streak++;
     checkDate.setDate(checkDate.getDate() - 1);
   }
+
+  // Persist updated streak to User collection asynchronously
+  const User = require("../models/User");
+  User.findByIdAndUpdate(userId, { streak, lastStreakDate: todayStr }).catch(() => {});
 
   return {
     dailyData,

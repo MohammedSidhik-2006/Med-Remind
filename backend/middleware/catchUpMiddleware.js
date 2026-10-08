@@ -44,8 +44,14 @@ const catchUpMedicinesForUser = async (userId) => {
     for (const med of stale) {
       if (!med.lastResetDate) continue;
 
+      const createdDate = med.createdAt ? getLocalDate(new Date(med.createdAt)) : med.startDate;
+      const tz = process.env.TZ || "Asia/Kolkata";
+      const createdTime = med.createdAt
+        ? new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(med.createdAt))
+        : "00:00";
+
       const [y, m, dayVal] = med.lastResetDate.split("-").map(Number);
-      let checkDate = new Date(Date.UTC(y, m - 1, dayVal));
+      let checkDate = new Date(Date.UTC(y, m - 1, dayVal, 12, 0, 0));
       
       const formatDate = (dateObj) => {
         const yr = dateObj.getUTCFullYear();
@@ -62,9 +68,20 @@ const catchUpMedicinesForUser = async (userId) => {
         const isStartOk = !med.startDate || checkDateStr >= med.startDate;
         const isEndOk = !med.endDate || checkDateStr <= med.endDate;
 
+        // Skip days before the medicine was even created
+        if (createdDate && checkDateStr < createdDate) {
+          checkDate.setUTCDate(checkDate.getUTCDate() + 1);
+          continue;
+        }
+
         if (isStartOk && isEndOk) {
           const allTimes = med.times && med.times.length > 0 ? med.times : [med.time];
           for (const t of allTimes) {
+            // If on creation date, skip slots that were before creation time
+            if (createdDate && checkDateStr === createdDate && t < createdTime) {
+              continue;
+            }
+
             const key = `${med._id.toString()}_${checkDateStr}_${t}`;
             if (!existingSet.has(key)) {
               logsToInsert.push({

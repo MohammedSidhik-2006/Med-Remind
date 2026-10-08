@@ -48,7 +48,8 @@ exports.addMedicine = async (req, res) => {
       endDate: endDate || "",
       stock: stockNum,
       refillAt: refillNum,
-      notes: (notes || "").trim()
+      notes: (notes || "").trim(),
+      lastResetDate: getLocalDate()
     });
 
     User.findById(req.user.id).select("email").then(u => {
