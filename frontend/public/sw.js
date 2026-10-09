@@ -1,6 +1,6 @@
-// MedRemind Service Worker — Production-Grade Notification Engine v9
-// Fixes: automatic daily state reset, slot-level taken checks, multi-day background alarms
-const CACHE_NAME = "medremind-v9";
+// MedRemind Service Worker — Production-Grade Notification Engine v10
+// Fixes: resilient catch-up window for device wakeups, automatic daily reset, slot-level taken checks
+const CACHE_NAME = "medremind-v10";
 const DB_NAME = "MedRemindOfflineDB";
 const DB_VERSION = 3; // Bumped for clean store migration
 
@@ -184,12 +184,20 @@ async function checkDueMedications() {
         if (!slotTime) continue;
 
         const isCurrentSlot = (slotTime === currentTime);
+
+        // Resilient catch-up calculation for device wake-ups / tab re-open:
+        const [slotH, slotM] = slotTime.split(":").map(Number);
+        const [curH, curM]   = currentTime.split(":").map(Number);
+        const diffMinutes    = (curH * 60 + curM) - (slotH * 60 + slotM);
+        const isRecentDue    = diffMinutes >= 0 && diffMinutes <= 60;
+
         // Only fire if:
         // A) It is the scheduled minute for this slot, OR
-        // B) A snooze matured specifically for this slot (or single-slot medicine)
+        // B) It was due recently (within 60m catch-up), OR
+        // C) A snooze matured specifically for this slot (or single-slot medicine)
         const isThisSlotSnoozeMatured = isSnoozeMatured && (targetSnoozeSlot === slotTime);
 
-        if (!isCurrentSlot && !isThisSlotSnoozeMatured) continue;
+        if (!isCurrentSlot && !isRecentDue && !isThisSlotSnoozeMatured) continue;
 
         // Slot-level taken check: only skip if THIS SPECIFIC slot was confirmed today
         const isSlotTakenToday = Array.isArray(med.todayLogs) && med.todayLogs.some(

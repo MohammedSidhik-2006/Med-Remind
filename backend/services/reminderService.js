@@ -108,13 +108,13 @@ const startReminder = () => {
 
       const { today, currentTime, nowMinutes } = getAsiaKolkataDateTime(now);
 
-      // ── 1. Send push reminders at scheduled times ─────────
-      // Part 3: Replace Medicine.find({}) with targeted query
+      // ── 1. Send push reminders at scheduled times (with resilient catch-up for sleeping servers) ─────────
       const activeMeds = await Medicine.find({
         $or: [
           { time: currentTime },
           { times: currentTime },
-          { snoozedUntil: { $lte: now, $ne: null } }
+          { snoozedUntil: { $lte: now, $ne: null } },
+          { taken: false } // Catch-up candidate: active meds not fully marked taken today
         ]
       }).lean();
 
@@ -126,25 +126,41 @@ const startReminder = () => {
           const isSnoozeMaturing = med.snoozedUntil && new Date(med.snoozedUntil) <= now;
           if (med.snoozedUntil && new Date(med.snoozedUntil) > now) continue;
 
-          const allTimes    = med.times?.length > 0 ? med.times : [med.time];
-          const reminderKey = `${today} ${currentTime}`;
+          const allTimes = med.times?.length > 0 ? med.times : [med.time];
 
-          // Determine if this minute matches a scheduled time
-          const isScheduledTime = allTimes.includes(currentTime) && med.lastReminderSent !== reminderKey;
+          for (const slotTime of allTimes) {
+            if (!slotTime) continue;
 
-          if (isScheduledTime || isSnoozeMaturing) {
-            const period       = getTimePeriod(currentTime);
-            const originalScheduledTime = isScheduledTime 
-              ? currentTime 
-              : (med.snoozedSlot || (med.lastReminderSent ? med.lastReminderSent.split(" ")[1] : currentTime));
+            const reminderKey = `${today} ${slotTime}`;
+
+            // If already reminded for this exact slot today and no snooze is maturing, skip
+            if (med.lastReminderSent === reminderKey && !isSnoozeMaturing) {
+              continue;
+            }
+
+            // Calculate minutes difference between current time and slot time (Asia/Kolkata)
+            const [curH, curM]   = currentTime.split(":").map(Number);
+            const [slotH, slotM] = slotTime.split(":").map(Number);
+            const diffMinutes    = (curH * 60 + curM) - (slotH * 60 + slotM);
+
+            const isExactMinute = (slotTime === currentTime);
+            // Catch-up window: up to 60 minutes after scheduled time (handles sleeping servers / cold restarts)
+            const isRecentDue = (diffMinutes >= 0 && diffMinutes <= 60);
+
+            if (!isExactMinute && !isRecentDue && !isSnoozeMaturing) continue;
+
+            const originalScheduledTime = isSnoozeMaturing
+              ? (med.snoozedSlot || slotTime)
+              : slotTime;
 
             // Before firing, ensure the user didn't ALREADY take this exact dose ahead of time
             const alreadyTaken = await DoseLog.findOne({ medicineId: med._id, date: today, scheduledTime: originalScheduledTime, status: "taken" });
             if (alreadyTaken) {
-              // Already handled! Clear the snooze bypass safely if it was stuck
               if (isSnoozeMaturing) await Medicine.findByIdAndUpdate(med._id, { $set: { snoozedUntil: null, snoozedSlot: "" } });
               continue;
             }
+
+            const period = getTimePeriod(originalScheduledTime);
 
             await Medicine.findByIdAndUpdate(med._id, {
               $set: { 
@@ -165,7 +181,6 @@ const startReminder = () => {
               title:         `💊 Time to take ${med.name}${isSnoozeMaturing ? " (Snoozed)" : ""}`,
               body:          `${med.dosage} — ${period}. Tap ✅ Take Now to confirm your dose.`,
               icon:          "/medremind-icon-192.svg",
-              // Tag MUST match the SW local-alarm tag to replace it instead of duplicating
               tag:           `local-med-${med._id}-${originalScheduledTime}`,
               medicineId:    med._id.toString(),
               medicineName:  med.name,
