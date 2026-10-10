@@ -162,14 +162,21 @@ function MedicineList({ medicines, setMedicines, loading, refreshMedicines, navi
     if (!deleteTarget) return;
     const backup = [...medicines];
     const targetId = deleteTarget._id;
-    setMedicines(prev => prev.filter(m => m._id !== targetId));
+    const updatedMeds = medicines.filter(m => m._id !== targetId);
+    setMedicines(updatedMeds);
     setDeleteTarget(null);
+
+    // Stop local alarms and prune Service Worker / IndexedDB cache immediately
+    try {
+      syncMedicinesToOfflineStorage(updatedMeds);
+    } catch {}
 
     try {
       await API.delete(`/medicine/${targetId}`);
       refreshMedicines();
     } catch (err) {
       setMedicines(backup);
+      try { syncMedicinesToOfflineStorage(backup); } catch {}
       setInfoModal({ title: "Delete Failed", message: "Failed to delete the medicine schedule.", icon: "Error" });
     }
   };

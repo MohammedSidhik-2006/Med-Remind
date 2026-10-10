@@ -107,12 +107,22 @@ const saveSubscriptionHandler = async (req, res) => {
     const userAgent = req.headers["user-agent"] || "";
     const subObj = { endpoint, keys, userAgent, updatedAt: new Date() };
 
-    // 1. Remove existing entry with same endpoint to avoid duplicates
+    // 1. Remove this device endpoint from ANY OTHER user in the database
+    // Guarantees strict device isolation: switching accounts immediately detaches old account reminders
+    await User.updateMany(
+      { _id: { $ne: req.user.id } },
+      { 
+        $pull: { pushSubscriptions: { endpoint } },
+        $set: { pushSubscription: null }
+      }
+    );
+
+    // 2. Remove existing entry with same endpoint from current user to avoid duplicates
     await User.findByIdAndUpdate(req.user.id, {
       $pull: { pushSubscriptions: { endpoint } }
     });
 
-    // 2. Add fresh subscription to array and set legacy single field
+    // 3. Add fresh subscription to array and set legacy single field
     await User.findByIdAndUpdate(req.user.id, {
       $push: { pushSubscriptions: subObj },
       $set: { pushSubscription: { endpoint, keys } }
@@ -126,6 +136,31 @@ const saveSubscriptionHandler = async (req, res) => {
 };
 app.post("/api/save-subscription", authMiddleware, saveSubscriptionHandler);
 app.post("/save-subscription", authMiddleware, saveSubscriptionHandler);
+
+// Remove push subscription when user logs out or disables notifications
+const unsubscribeSubscriptionHandler = async (req, res) => {
+  try {
+    const { endpoint } = req.body || {};
+    if (endpoint) {
+      await User.updateMany(
+        {},
+        {
+          $pull: { pushSubscriptions: { endpoint } }
+        }
+      );
+      await User.updateMany(
+        { "pushSubscription.endpoint": endpoint },
+        { $set: { pushSubscription: null } }
+      );
+    }
+    res.json({ message: "Subscription removed successfully" });
+  } catch (err) {
+    console.error("unsubscribe-subscription error:", err.message);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+app.post("/api/unsubscribe-subscription", unsubscribeSubscriptionHandler);
+app.post("/unsubscribe-subscription", unsubscribeSubscriptionHandler);
 
 // Test push notification — sends to the logged-in user (support both paths)
 const sendNotificationHandler = async (req, res) => {

@@ -246,7 +246,22 @@ export async function setupAppNotifications() {
  * and the Service Worker's schedule cache. Stops local alarm heartbeat.
  */
 export async function clearOfflineStorage() {
-  // 1. Tell SW to stop heartbeat and clear user data
+  // 1. Unsubscribe device push subscription on server so logged-out device receives no background alerts
+  try {
+    if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+      const registration = await navigator.serviceWorker.ready;
+      const sub = await registration.pushManager?.getSubscription();
+      if (sub && sub.endpoint) {
+        fetch(`${getApiBase()}/api/unsubscribe-subscription`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ endpoint: sub.endpoint })
+        }).catch(() => {});
+      }
+    }
+  } catch {}
+
+  // 2. Tell SW to stop heartbeat and clear user data
   try {
     if ("serviceWorker" in navigator) {
       const registration = await navigator.serviceWorker.ready;
