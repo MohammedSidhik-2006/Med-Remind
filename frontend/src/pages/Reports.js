@@ -92,10 +92,10 @@ function AdherenceChart({ data, height = 120 }) {
 
 // Client-side heuristic analysis for instant resilience if remote LLM API has network delay or cold start
 function generateClientHeuristicInsights(reportData, period = "week") {
-  const adherence = reportData?.adherence ?? 0;
-  const taken = reportData?.takenDoses ?? 0;
-  const missed = reportData?.missedDoses ?? 0;
-  const total = reportData?.totalDoses ?? 0;
+  const taken = reportData?.totalTaken ?? reportData?.takenDoses ?? 0;
+  const missed = reportData?.totalMissed ?? reportData?.missedDoses ?? 0;
+  const total = reportData?.totalDoses ?? (taken + missed);
+  const adherence = reportData?.overallAdherence ?? reportData?.adherence ?? (total > 0 ? Math.round((taken / total) * 100) : 0);
   const streak = reportData?.streak ?? 0;
   const periodLabel = period === "month" ? "30-day" : "7-day";
 
@@ -163,8 +163,8 @@ function Reports() {
   const [aiError, setAiError] = useState(null);
   const aiLoadingRef = useRef(false);
 
-  const handleGenerateInsights = async () => {
-    if (aiLoadingRef.current || aiLoading) return;
+  const handleGenerateInsights = useCallback(async (currentData) => {
+    if (aiLoadingRef.current) return;
     aiLoadingRef.current = true;
     setAiLoading(true);
     setAiError(null);
@@ -172,20 +172,19 @@ function Reports() {
       const res = await API.get(`/ai/report-insights?period=${period}`);
       if (res?.data && !res.data.isInsufficientData) {
         setAiInsights(res.data);
-      } else if (res?.data?.isInsufficientData && (data?.totalDoses > 0 || (Array.isArray(data?.dailyData) && data.dailyData.length > 0))) {
-        setAiInsights(generateClientHeuristicInsights(data, period));
       } else {
-        setAiInsights(res?.data || generateClientHeuristicInsights(data, period));
+        const activeData = currentData || data;
+        setAiInsights(res?.data?.summary ? res.data : generateClientHeuristicInsights(activeData, period));
       }
     } catch (err) {
       console.warn("AI Insights remote API note:", err?.response?.data?.message || err.message);
-      // Seamlessly generate heuristic clinical insights so the user NEVER gets blocked
-      setAiInsights(generateClientHeuristicInsights(data, period));
+      const activeData = currentData || data;
+      setAiInsights(generateClientHeuristicInsights(activeData, period));
     } finally {
       aiLoadingRef.current = false;
       setAiLoading(false);
     }
-  };
+  }, [period, data]);
 
   // Auth guard
   useEffect(() => {
@@ -196,14 +195,16 @@ function Reports() {
     setLoading(true);
     try {
       const res = await API.get(`/medicine/reports?period=${period}`);
-      setData(res?.data || {});
+      const repData = res?.data || {};
+      setData(repData);
+      handleGenerateInsights(repData);
     } catch (err) {
       console.error("Reports error:", err.message);
       setData({});
     } finally {
       setLoading(false);
     }
-  }, [period]);
+  }, [period, handleGenerateInsights]);
 
   useEffect(() => { fetchReports(); }, [fetchReports]);
 

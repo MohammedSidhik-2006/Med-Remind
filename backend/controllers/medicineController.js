@@ -388,11 +388,16 @@ exports.resetTaken = async (req, res) => {
 exports.getReports = async (req, res) => {
   try {
     const metrics = await calculateReportMetrics(req.user.id, req.query.period);
+    const totalDoses = metrics.totalDoses || (metrics.totalTaken + metrics.totalMissed);
     res.json({
       dailyData: metrics.dailyData,
       totalTaken: metrics.totalTaken,
       totalMissed: metrics.totalMissed,
+      totalDoses,
+      takenDoses: metrics.totalTaken,
+      missedDoses: metrics.totalMissed,
       overallAdherence: metrics.overallAdherence,
+      adherence: metrics.overallAdherence,
       streak: metrics.streak,
       period: metrics.period
     });
