@@ -554,23 +554,28 @@ function Dashboard() {
                 </div>
               </Card.Header>
               <Card.Body>
-                <ProgressBar.Adherence
-                  value={dailyProgress}
-                  label={`${stats.taken} of ${stats.total} doses completed`}
-                  showGrade={true}
-                />
-                
-                <div className="progress-breakdown mt-4">
-                  <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: "8px", fontSize: "13px" }}>
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "6px 12px", borderRadius: "8px", background: "var(--success-light)", color: "var(--success)", fontWeight: "700" }}>
-                      ✓ Taken: {stats.taken}
-                    </span>
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "6px 12px", borderRadius: "8px", background: "var(--warning-light)", color: "var(--warning)", fontWeight: "700" }}>
-                      ⏳ Pending: {stats.pending}
-                    </span>
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "6px 12px", borderRadius: "8px", background: "var(--danger-light)", color: "var(--danger)", fontWeight: "700" }}>
-                      ✗ Missed: {stats.missed}
-                    </span>
+                <div className="progress-ring-dashboard-layout">
+                  <ProgressBar.Ring
+                    value={dailyProgress}
+                    taken={stats.taken}
+                    total={stats.total}
+                    size={146}
+                    strokeWidth={12}
+                    showGrade={true}
+                  />
+                  
+                  <div className="progress-breakdown-panel">
+                    <div className="progress-chips-group">
+                      <span className="progress-chip progress-chip-success">
+                        ✓ Taken: {stats.taken}
+                      </span>
+                      <span className="progress-chip progress-chip-warning">
+                        ⏳ Pending: {stats.pending}
+                      </span>
+                      <span className="progress-chip progress-chip-danger">
+                        ✗ Missed: {stats.missed}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </Card.Body>

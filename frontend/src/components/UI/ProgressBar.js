@@ -143,4 +143,131 @@ ProgressBar.Adherence = function AdherenceProgress({
   );
 };
 
+// Modern, ultra-smooth SVG Circular Progress Ring component
+ProgressBar.Ring = function CircularProgressRing({
+  value = 0,
+  max = 100,
+  taken,
+  total,
+  size = 144,
+  strokeWidth = 11,
+  showGrade = true,
+  className = ""
+}) {
+  const percentage = Math.min(Math.max((value / max) * 100, 0), 100);
+  const rounded = Math.round(percentage);
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference - (percentage / 100) * circumference;
+
+  const getColor = () => {
+    if (total === 0) return "var(--text-muted, #94a3b8)";
+    if (percentage >= 90) return "#059669";
+    if (percentage >= 70) return "#0d9488";
+    if (percentage >= 40) return "#d97706";
+    return "#e11d48";
+  };
+
+  const getGradientId = () => {
+    if (total === 0) return "ringGradNeutral";
+    if (percentage >= 90) return "ringGradSuccess";
+    if (percentage >= 70) return "ringGradTeal";
+    if (percentage >= 40) return "ringGradWarning";
+    return "ringGradDanger";
+  };
+
+  const getGrade = () => {
+    if (total === 0) return { label: "No Doses Scheduled", class: "adherence-neutral", icon: "💊" };
+    if (percentage >= 95) return { label: "Excellent Adherence", class: "adherence-excellent", icon: "✨" };
+    if (percentage >= 85) return { label: "Great Consistency", class: "adherence-good", icon: "👍" };
+    if (percentage >= 70) return { label: "Fair Routine", class: "adherence-fair", icon: "⏱️" };
+    return { label: "Doses Pending", class: "adherence-poor", icon: "⏳" };
+  };
+
+  const color = getColor();
+  const grade = getGrade();
+
+  return (
+    <div className={`progress-ring-container ${className}`}>
+      <div className="progress-ring-circle-box" style={{ width: size, height: size }}>
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="progress-ring-svg">
+          <defs>
+            <linearGradient id="ringGradSuccess" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#10b981" />
+              <stop offset="100%" stopColor="#059669" />
+            </linearGradient>
+            <linearGradient id="ringGradTeal" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#14b8a6" />
+              <stop offset="100%" stopColor="#0d9488" />
+            </linearGradient>
+            <linearGradient id="ringGradWarning" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#fbbf24" />
+              <stop offset="100%" stopColor="#d97706" />
+            </linearGradient>
+            <linearGradient id="ringGradDanger" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#f43f5e" />
+              <stop offset="100%" stopColor="#e11d48" />
+            </linearGradient>
+            <linearGradient id="ringGradNeutral" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#e2e8f0" />
+              <stop offset="100%" stopColor="#cbd5e1" />
+            </linearGradient>
+            <filter id="ringGlow" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="2.5" result="blur" />
+              <feComposite in="SourceGraphic" in2="blur" operator="over" />
+            </filter>
+          </defs>
+
+          {/* Background track circle */}
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            stroke="#f1f5f9"
+            strokeWidth={strokeWidth}
+            fill="none"
+          />
+
+          {/* Animated active progress circle */}
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            stroke={`url(#${getGradientId()})`}
+            strokeWidth={strokeWidth}
+            fill="none"
+            strokeDasharray={circumference}
+            strokeDashoffset={total === 0 ? circumference : strokeDashoffset}
+            strokeLinecap="round"
+            className="progress-ring-animated-circle"
+            filter="url(#ringGlow)"
+            transform={`rotate(-90 ${size / 2} ${size / 2})`}
+          />
+        </svg>
+
+        {/* Center content */}
+        <div className="progress-ring-center-text">
+          <span className="progress-ring-pct" style={{ color }}>
+            {total === 0 ? "0%" : `${rounded}%`}
+          </span>
+          {typeof taken === "number" && typeof total === "number" && (
+            <span className="progress-ring-doses">
+              {taken} / {total} Doses
+            </span>
+          )}
+        </div>
+      </div>
+
+      {showGrade && (
+        <div className="progress-ring-meta">
+          <div className={`progress-ring-grade-pill ${grade.class}`}>
+            <span style={{ marginRight: 6 }}>{grade.icon}</span>
+            <span>{grade.label}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default ProgressBar;
